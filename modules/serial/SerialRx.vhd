@@ -84,16 +84,19 @@ architecture Behavioral of SerialRx is
 
 begin
 
-   sample_en : entity work.clk_div_generic
+    sample_en : entity work.PulseGenerator
         generic map (
-            period_width        => SAMPLE_PERIOD_WIDTH
+            WIDTH               => SAMPLE_PERIOD_WIDTH 
         )
         port map (
-            period              => std_logic_vector(to_unsigned(SAMPLE_PERIOD,SAMPLE_PERIOD_WIDTH)),
-            clk                 => CLK,
-            en                  => EN,
-            rst                 => RST,
-            en_out              => sample_en_sig
+            -- inputs
+            CLK                 => CLK,
+            RST                 => RST,
+            EN                  => EN,
+            PERIOD              => std_logic_vector(to_unsigned(SAMPLE_PERIOD-1,SAMPLE_PERIOD_WIDTH)),
+            INIT_PERIOD         => std_logic_vector(to_unsigned(SAMPLE_PERIOD-1,SAMPLE_PERIOD_WIDTH)),
+            -- outputs
+            PULSE               => sample_en_sig
         );
         
      SAMPLE <= sample_en_sig;
@@ -124,17 +127,19 @@ begin
     DETECTOR_DATA <= data_sig;
     DETECTOR_VALID <= valid_sig;
 
-   bit_timer : entity work.clk_div_generic
+    bit_timer : entity work.PulseGenerator
         generic map (
-            period_width        => BIT_TIMER_WIDTH,
-            phase_lag           => VALID_LAG
+            WIDTH               => BIT_TIMER_WIDTH 
         )
         port map (
-            period              => std_logic_vector(to_unsigned(BIT_TIMER_PERIOD,BIT_TIMER_WIDTH)),
-            clk                 => CLK,
-            en                  => sample_en_sig,
-            rst                 => rst_timer_sig,
-            en_out              => timer_sig
+            -- inputs
+            CLK                 => CLK,
+            RST                 => rst_timer_sig,
+            EN                  => sample_en_sig,
+            PERIOD              => std_logic_vector(to_unsigned(BIT_TIMER_PERIOD-1,BIT_TIMER_WIDTH)),
+            INIT_PERIOD         => std_logic_vector(to_unsigned(BIT_TIMER_PERIOD+VALID_LAG-1,BIT_TIMER_WIDTH)),
+            -- outputs
+            PULSE               => timer_sig
         );
         
    counter : process (CLK) begin

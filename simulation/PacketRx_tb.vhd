@@ -58,7 +58,7 @@ begin
     PacketRx_module: entity work.PacketRx
         generic map (
             SYMBOL_WIDTH        => 8,
-            PACKET_SYMBOLS      => 4,
+            DATA_SYMBOLS        => 4,
             HEADER_SYMBOLS		=> 2
         )
         port map (
