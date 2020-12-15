@@ -40,7 +40,13 @@ architecture Behavioral of FreqBurst is
   signal adc_sample_sig         : std_logic;
   signal i_out_sig              : std_logic_vector(15 downto 0);
   signal q_out_sig              : std_logic_vector(15 downto 0);
+  
   signal adc_combined_sig       : std_logic_vector(31 downto 0);
+
+  signal packet_rx_valid_sig    : std_logic;
+  signal packet_rx_data_sig     : std_logic_vector(8*8-1 downto 0);
+  signal packet_rx_data_reg_sig : std_logic_vector(8*8-1 downto 0);
+  signal serial_alarm_sig       : std_logic_vector(1 downto 0);
 
 begin
 
@@ -91,23 +97,71 @@ begin
     adc_combined_sig <= i_out_sig & q_out_sig;
     
 
-    FIFOPacketSerialTx_module: entity work.FIFOPacketSerialTx
-        generic map (
-            SYMBOL_WIDTH            => 8, -- typically a BYTE
-            PACKET_SYMBOLS          => 4, -- PACKET_SYMBOLS does not include the last checksum symbol
-            HEADER_SYMBOLS          => 2
-        )
+    FreqBurstTelemetry_module: entity work.FreqBurstTelemetry
         port map (
             CLK                     => CLK,
             RST                     => RST,
+            
+            SERIAL_RX               => SERIAL_RX,
+            SERIAL_TX               => SERIAL_TX,
+            SERIAL_ALARM            => serial_alarm_sig,
     
+            -- RX data (8 bytes)
+            VALID_OUT               => packet_rx_valid_sig,
+            CYCLES					=> cycle_end_sig, -- cycles-1
+            FREQ_START				=> freq_start_sig,
+            FREQ_END				=> freq_end_sig,
+            TIME_PRE	    		=> time_pre_sig, -- units of samples
+            TIME_STEP			  	=> time_step_sig, -- units of samples
+            TIME_POST 	  			=> time_post_sig, -- units of samples
+            
+            -- TX data (7 bytes)
             VALID_IN                => adc_sample_sig,
-            HEADER_IN               => x"0102",
-            PACKET_IN               => adc_combined_sig,
-    
-            SERIAL_PERIOD           => x"0063", -- 1Mb/s
-            SERIAL_TX               => SERIAL_TX
+            I_ADC					=> i_out_sig,
+            Q_ADC					=> q_out_sig,
+            CYCLE_COUNT 			=> cycle_count_sig,        
+            SAMPLE_COUNT			=> sample_count_sig, -- could roll over
         );
+    
+    
+    receive_reg : entity work.Reg1D
+        generic map (
+            LENGTH      => 8*8
+        )
+        port map (
+            CLK         => CLK,
+            RST         => RST,
+            PAR_EN      => packet_rx_valid_sig,
+            PAR_IN      => packet_rx_data_sig,
+            PAR_OUT     => packet_rx_data_reg_sig
+        );
+
+    cycle_counter : entity work.Timer
+        generic map (
+            WIDTH           => 8
+        )
+        port map (
+            CLK             => CLK,
+            EN              => cycle_en_sig,
+            RST             => cycle_rst_sig,
+            COUNT_END       => cycle_end_sig,
+    
+            COUNT           => cycle_count_sig,
+            DONE            => cycle_done_sig
+        );
+    
+    sample_counter : entity work.Timer
+        generic map (
+            WIDTH           => 16
+        )
+        port map (
+            CLK             => CLK,
+            EN              => sample_en_sig,
+            RST             => sample_rst_sig,
+    
+            COUNT           => sample_count_sig
+        );
+    
 
 
 end Behavioral;
