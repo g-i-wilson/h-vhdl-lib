@@ -44,7 +44,7 @@ architecture Behavioral of FreqBurstTelemetry is
   signal packet_rx_data_sig     : std_logic_vector(8*8-1 downto 0);
   signal serial_rx_valid_sig    : std_logic;
   signal serial_rx_data_sig     : std_logic_vector(7 downto 0);
-  signal rx_header_sig          : std_logic_vector(7 downto 0);
+  signal rx_header_sig          : std_logic_vector(15 downto 0);
 
 	-- TX signals
   signal fifo_tx_ready_sig      : std_logic;
@@ -53,10 +53,11 @@ architecture Behavioral of FreqBurstTelemetry is
   signal packet_tx_ready_sig    : std_logic;
   signal packet_tx_valid_sig    : std_logic;
   signal uart_tx_ready_sig      : std_logic;
-  signal fifo_tx_data_sig       : std_logic_vector(8*7-1 downto 0);
+  signal fifo_tx_in_sig         : std_logic_vector(8*7-1 downto 0);
+  signal fifo_tx_out_sig        : std_logic_vector(8*7-1 downto 0);
   signal packet_tx_data_sig     : std_logic_vector(8*(7+2)-1 downto 0);
   signal packet_tx_symbol_sig   : std_logic_vector(7 downto 0);
-  signal tx_header_sig          : std_logic_vector(7 downto 0);
+  signal tx_header_sig          : std_logic_vector(15 downto 0);
 
 
 begin    
@@ -68,8 +69,8 @@ begin
     rx_header_sig <= x"0102";
 
     CYCLES      <= packet_rx_data_sig(8*8-1 downto 8*7);
-    FREQ_START  <= packet_rx_data_sig(8*7-1  downto 8*6+4);
-    FREQ_END 	<= packet_rx_data_sig(8*6+3  downto 8*6);
+    FREQ_START  <= packet_rx_data_sig(8*7-1 downto 8*6+4);
+    FREQ_END 	<= packet_rx_data_sig(8*6+3 downto 8*6);
     TIME_PRE 	<= packet_rx_data_sig(8*6-1 downto 8*4);
     TIME_STEP 	<= packet_rx_data_sig(8*4-1 downto 8*2);
     TIME_POST 	<= packet_rx_data_sig(8*2-1 downto 0);
@@ -99,7 +100,7 @@ begin
     PacketRx_module: entity work.PacketRx
         generic map (
             SYMBOL_WIDTH        => 8,
-            DATA_SYMBOLS      	=> 9,
+            DATA_SYMBOLS      	=> 8,
             HEADER_SYMBOLS      => 2
         )
         port map (
@@ -123,6 +124,7 @@ begin
     ----------------------------------------------
 
     tx_header_sig <= x"0102";
+    fifo_tx_in_sig <= I_ADC & Q_ADC & CYCLE_COUNT & SAMPLE_COUNT;
 
     FIFO_Tx_module : FIFO_SYNC_MACRO
         generic map (
@@ -136,20 +138,20 @@ begin
             CLK                 => CLK,                 -- 1-bit input clock
             RST                 => RST,                 -- 1-bit input reset
             -- input path
-            DI                  => packet_tx_data_sig,        -- Input data, width defined by DATA_WIDTH parameter
+            DI                  => fifo_tx_in_sig,        -- Input data, width defined by DATA_WIDTH parameter
             WREN                => VALID_IN,       -- 1-bit input write enable
             -- output path
-            DO                  => fifo_tx_data_sig,       -- Output data, width defined by DATA_WIDTH parameter
+            DO                  => fifo_tx_out_sig,       -- Output data, width defined by DATA_WIDTH parameter
             RDEN                => fifo_tx_ready_sig,        -- 1-bit input read enable
             EMPTY               => fifo_tx_not_valid_sig   -- 1-bit output empty
         );
         
     fifo_tx_valid_sig <= not fifo_tx_not_valid_sig;
-    packet_tx_data_sig <= tx_header_sig & fifo_tx_data_sig;
+    packet_tx_data_sig <= tx_header_sig & fifo_tx_out_sig;
 
     PacketTx_module: entity work.PacketTx
         generic map (
-            SYMBOL_WIDTH        => 7,
+            SYMBOL_WIDTH        => 8,
             PACKET_SYMBOLS      => 7+2
         )
         port map (
