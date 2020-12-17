@@ -22,6 +22,7 @@ entity FreqBurst is
 
         RF_EN                   : out std_logic;
         RF_FREQ                 : out std_logic_vector(3 downto 0);
+        RF_FREQ_DIV             : in std_logic;
 
         SERIAL_TX               : out std_logic;
         SERIAL_RX               : in std_logic
@@ -68,6 +69,7 @@ architecture Behavioral of FreqBurst is
     signal q_out_sig                : std_logic_vector(15 downto 0);
     signal cycle_count_sig          : std_logic_vector(7 downto 0);
     signal sample_count_sig         : std_logic_vector(15 downto 0);
+    signal freq_div_sig             : std_logic_vector(7 downto 0);
     
 begin
 
@@ -141,9 +143,28 @@ begin
             I_ADC					=> i_out_sig,
             Q_ADC					=> q_out_sig,
             CYCLE_COUNT 			=> cycle_count_sig,        
-            SAMPLE_COUNT			=> sample_count_sig -- could roll over
+            SAMPLE_COUNT			=> sample_count_sig, -- could roll over
+            FREQ_DIV                => freq_div_sig
         );
     
+    PeriodDetector_module: entity work.PeriodDetector
+        generic map (
+            SAMPLE_LENGTH           => 16,
+            SUM_WIDTH               => 4,
+            LOGIC_HIGH              => 13,
+            LOGIC_LOW               => 2,
+            SUM_START               => 7,
+            PERIOD_WIDTH            => 8
+        )
+        port map (
+            CLK                     => CLK,
+            RST                     => RST,
+            EN                      => '1',
+            
+            SIG_IN                  => RF_FREQ_DIV,
+            
+            PERIOD                  => freq_div_sig
+        );    
     
     sample_timer : entity work.Timer
         generic map (

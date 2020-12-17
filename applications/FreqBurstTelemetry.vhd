@@ -27,12 +27,13 @@ entity FreqBurstTelemetry is
         TIME_STEP			  	: out std_logic_vector(15 downto 0); -- units of samples
         TIME_POST 	  			: out std_logic_vector(15 downto 0); -- units of samples
         
-		-- TX data (7 bytes)
+		-- TX data (8 bytes)
         VALID_IN                : in std_logic;
         I_ADC					: in std_logic_vector(15 downto 0);
         Q_ADC					: in std_logic_vector(15 downto 0);
         CYCLE_COUNT 			: in std_logic_vector(7 downto 0);        
-        SAMPLE_COUNT			: in std_logic_vector(15 downto 0) -- could roll over
+        SAMPLE_COUNT			: in std_logic_vector(15 downto 0); -- could roll over
+        FREQ_DIV 			    : in std_logic_vector(7 downto 0)        
     );
 end FreqBurstTelemetry;
 
@@ -53,9 +54,9 @@ architecture Behavioral of FreqBurstTelemetry is
   signal packet_tx_ready_sig    : std_logic;
   signal packet_tx_valid_sig    : std_logic;
   signal uart_tx_ready_sig      : std_logic;
-  signal fifo_tx_in_sig         : std_logic_vector(8*7-1 downto 0);
-  signal fifo_tx_out_sig        : std_logic_vector(8*7-1 downto 0);
-  signal packet_tx_data_sig     : std_logic_vector(8*(7+2)-1 downto 0);
+  signal fifo_tx_in_sig         : std_logic_vector(8*8-1 downto 0);
+  signal fifo_tx_out_sig        : std_logic_vector(8*8-1 downto 0);
+  signal packet_tx_data_sig     : std_logic_vector(8*(8+2)-1 downto 0);  -- TX data includes header
   signal packet_tx_symbol_sig   : std_logic_vector(7 downto 0);
   signal tx_header_sig          : std_logic_vector(15 downto 0);
 
@@ -124,14 +125,14 @@ begin
     ----------------------------------------------
 
     tx_header_sig <= x"0102";
-    fifo_tx_in_sig <= I_ADC & Q_ADC & CYCLE_COUNT & SAMPLE_COUNT;
+    fifo_tx_in_sig <= I_ADC & Q_ADC & CYCLE_COUNT & SAMPLE_COUNT & FREQ_DIV;
 
     FIFO_Tx_module : FIFO_SYNC_MACRO
         generic map (
     --        DEVICE              => "7SERIES",             -- Target Device: "VIRTEX5, "VIRTEX6", "7SERIES" 
     --        ALMOST_FULL_OFFSET  => X"0080",               -- Sets almost full threshold
     --        ALMOST_EMPTY_OFFSET => X"0080",               -- Sets the almost empty threshold
-            DATA_WIDTH          => 8*7,                    -- Valid values are 1-72 (37-72 only valid when FIFO_SIZE="36Kb")
+            DATA_WIDTH          => 8*8,                    -- Valid values are 1-72 (37-72 only valid when FIFO_SIZE="36Kb")
             FIFO_SIZE           => "36Kb"               -- Target BRAM, "18Kb" or "36Kb" 
         )
         port map (
@@ -152,7 +153,7 @@ begin
     PacketTx_module: entity work.PacketTx
         generic map (
             SYMBOL_WIDTH        => 8,
-            PACKET_SYMBOLS      => 7+2
+            PACKET_SYMBOLS      => 8+2
         )
         port map (
             CLK                 => CLK,

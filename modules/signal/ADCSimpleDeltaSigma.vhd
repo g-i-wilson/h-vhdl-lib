@@ -33,18 +33,30 @@ end ADCSimpleDeltaSigma;
 
 architecture Behavioral of ADCSimpleDeltaSigma is
 
+  signal adc_in_sig             : std_logic;
   signal adc_out_sig            : std_logic;
   signal filter_in_sig          : std_logic_vector(1 downto 0);
   signal filter_out_sig         : std_logic_vector(SIG_OUT_WIDTH-1 downto 0);
 
 begin
 
+    sync_reg : entity work.Synchronizer
+        generic map (
+            SYNC_LENGTH     => 3
+        )
+        port map (
+            RST             => RST,
+            CLK             => CLK,
+            SIG_IN        	=> CMP_IN,
+            SIG_OUT         => adc_in_sig
+        );
+
     ADC: entity work.ADC1Bit
         port map (
             CLK                     => CLK,
             EN                      => EN_SAMPLE,
             RST                     => RST,
-            CMP_IN                  => CMP_IN,
+            CMP_IN                  => adc_in_sig,
             INV_OUT                 => INV_OUT,
             PDM_OUT                 => adc_out_sig
         );
