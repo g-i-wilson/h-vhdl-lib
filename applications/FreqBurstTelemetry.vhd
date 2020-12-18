@@ -10,6 +10,12 @@ use UNIMACRO.vcomponents.all;
 
 
 entity FreqBurstTelemetry is
+    generic (
+        RX_HEADER_BYTES         : positive := 2;
+        RX_DATA_BYTES           : positive := 8;
+        TX_HEADER_BYTES         : positive := 2;
+        TX_DATA_BYTES           : positive := 8
+    );
     port (
         CLK                     : in std_logic;
         RST                     : in std_logic;
@@ -20,20 +26,13 @@ entity FreqBurstTelemetry is
 
 		-- RX data (8 bytes)
         VALID_OUT               : out std_logic;
-        CYCLES					: out std_logic_vector(7 downto 0); -- cycles-1
-        FREQ_START				: out std_logic_vector(3 downto 0);
-        FREQ_END				: out std_logic_vector(3 downto 0);
-        TIME_PRE	    		: out std_logic_vector(15 downto 0); -- units of samples
-        TIME_STEP			  	: out std_logic_vector(15 downto 0); -- units of samples
-        TIME_POST 	  			: out std_logic_vector(15 downto 0); -- units of samples
+        RX_HEADER		        : in std_logic_vector(RX_HEADER_BYTES*8-1 downto 0);
+        RX_DATA  		        : out std_logic_vector(RX_DATA_BYTES*8-1 downto 0);
         
 		-- TX data (8 bytes)
         VALID_IN                : in std_logic;
-        I_ADC					: in std_logic_vector(15 downto 0);
-        Q_ADC					: in std_logic_vector(15 downto 0);
-        CYCLE_COUNT 			: in std_logic_vector(7 downto 0);        
-        SAMPLE_COUNT			: in std_logic_vector(15 downto 0); -- could roll over
-        FREQ_DIV 			    : in std_logic_vector(7 downto 0)        
+        TX_HEADER		        : in std_logic_vector(TX_HEADER_BYTES*8-1 downto 0);
+        TX_DATA  		        : in std_logic_vector(TX_DATA_BYTES*8-1 downto 0)
     );
 end FreqBurstTelemetry;
 
@@ -67,15 +66,6 @@ begin
     -- RX
     ----------------------------------------------
     
-    rx_header_sig <= x"0102";
-
-    CYCLES      <= packet_rx_data_sig(8*8-1 downto 8*7);
-    FREQ_START  <= packet_rx_data_sig(8*7-1 downto 8*6+4);
-    FREQ_END 	<= packet_rx_data_sig(8*6+3 downto 8*6);
-    TIME_PRE 	<= packet_rx_data_sig(8*6-1 downto 8*4);
-    TIME_STEP 	<= packet_rx_data_sig(8*4-1 downto 8*2);
-    TIME_POST 	<= packet_rx_data_sig(8*2-1 downto 0);
-
     SerialRx_module: entity work.SerialRx
         generic map (
             SAMPLE_PERIOD_WIDTH 	=> 1,
@@ -108,7 +98,7 @@ begin
             CLK                 => CLK,
             RST                 => RST,
             
-            HEADER_IN           => rx_header_sig,
+            HEADER_IN           => RX_HEADER,
             SYMBOL_IN           => serial_rx_data_sig,
 
             VALID_IN            => serial_rx_valid_sig,
@@ -116,7 +106,7 @@ begin
             VALID_OUT           => packet_rx_valid_sig,
            	READY_IN            => '1',
         
-            DATA_OUT            => packet_rx_data_sig
+            DATA_OUT            => RX_DATA
         );
 
 

@@ -119,6 +119,12 @@ begin
 
 
     FreqBurstTelemetry_module: entity work.FreqBurstTelemetry
+        generic map (
+            RX_HEADER_BYTES         => 2,
+            RX_DATA_BYTES           => 8,
+            TX_HEADER_BYTES         => 2,
+            TX_DATA_BYTES           => 8
+        )
         port map (
             CLK                     => CLK,
             RST                     => RST,
@@ -129,23 +135,25 @@ begin
     
             -- RX valid
             VALID_OUT               => packet_rx_valid_sig,
-            -- RX data (8 bytes)
-            CYCLES					=> cycle_end_sig, -- cycles-1
-            FREQ_START				=> freq_start_sig,
-            FREQ_END				=> freq_end_sig,
-            TIME_PRE	    		=> time_pre_sig, -- units of samples
-            TIME_STEP			  	=> time_step_sig, -- units of samples
-            TIME_POST 	  			=> time_post_sig, -- units of samples
+            RX_HEADER    			=> packet_rx_header_sig,
+            RX_DATA                 => packet_rx_data_sig,
             
             -- TX valid
-            VALID_IN                => adc_sample_sig,
-            -- TX data (7 bytes)
-            I_ADC					=> i_out_sig,
-            Q_ADC					=> q_out_sig,
-            CYCLE_COUNT 			=> cycle_count_sig,        
-            SAMPLE_COUNT			=> sample_count_sig, -- could roll over
-            FREQ_DIV                => freq_div_sig
+            VALID_IN                => packet_tx_valid_sig,
+            TX_HEADER               => packet_tx_header_sig,
+            TX_DATA					=> packet_tx_data_sig
         );
+        
+    rx_header_sig <= x"0102";
+
+    cycle_end_sig   <= packet_rx_data_rev_sig(8*8-1 downto 8*7); -- cycles-1
+    freq_start_sig  <= packet_rx_data_rev_sig(8*7-1 downto 8*6+4);
+    freq_end_sig 	<= packet_rx_data_rev_sig(8*6+3 downto 8*6);
+    time_pre_sig 	<= packet_rx_data_rev_sig(8*6-1 downto 8*4);
+    time_step_sig 	<= packet_rx_data_rev_sig(8*4-1 downto 8*2);
+    time_post_sig 	<= packet_rx_data_rev_sig(8*2-1 downto 0);
+    
+    tx_header_sig <= x"0102" when 
     
     PeriodDetector_module: entity work.PeriodDetector
         generic map (

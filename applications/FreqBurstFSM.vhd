@@ -17,6 +17,8 @@ entity FreqBurstFSM is
         
         VALID_IN        : in STD_LOGIC;
 
+        SAMPLE          : in STD_LOGIC;
+
         TIMER_MODE_PRE  : out STD_LOGIC;
         TIMER_MODE_STEP : out STD_LOGIC;
         TIMER_MODE_POST : out STD_LOGIC;
@@ -43,12 +45,12 @@ end FreqBurstFSM;
 
 architecture Behavioral of FreqBurstFSM is
 
-constant VALID_IN_WAIT_STATE        : std_logic_vector(3 downto 0) := x"0";
-constant PRE_INIT_STATE             : std_logic_vector(3 downto 0) := x"1";
-constant PRE_STATE                  : std_logic_vector(3 downto 0) := x"2";
-constant STEP_INIT_STATE            : std_logic_vector(3 downto 0) := x"3";
-constant STEP_WAIT_STATE            : std_logic_vector(3 downto 0) := x"4";
-constant STEP_INCR_STATE            : std_logic_vector(3 downto 0) := x"5";
+constant VALID_IN_STATE             : std_logic_vector(3 downto 0) := x"0";
+constant SAMPLE_SYNC_STATE          : std_logic_vector(3 downto 0) := x"1";
+constant PRE_INIT_STATE             : std_logic_vector(3 downto 0) := x"2";
+constant PRE_STATE                  : std_logic_vector(3 downto 0) := x"3";
+constant STEP_INIT_STATE            : std_logic_vector(3 downto 0) := x"4";
+constant STEP_STATE                 : std_logic_vector(3 downto 0) := x"5";
 constant POST_INIT_STATE            : std_logic_vector(3 downto 0) := x"6";
 constant POST_STATE                 : std_logic_vector(3 downto 0) := x"7";
 
@@ -78,15 +80,21 @@ begin
         TIMER_DONE,
         FREQ_DONE,
         CYCLE_DONE,
-        ZERO_STEP_TIME
+        ZERO_STEP_TIME,
+        SAMPLE
     ) begin
   
         next_state <= current_state;
         
         case current_state is
         
-            when PRE_INIT_STATE =>
+            when VALID_IN_STATE =>
                 if (VALID_IN = '1') then
+                    next_state <= SAMPLE_SYNC_STATE;
+                end if;
+        
+            when SAMPLE_SYNC_STATE =>
+                if (SAMPLE = '1') then
                     next_state <= PRE_INIT_STATE;
                 end if;
         
@@ -103,19 +111,16 @@ begin
                 end if;
                   
             when STEP_INIT_STATE =>
-                next_state <= STEP_WAIT_STATE;
+                next_state <= STEP_STATE;
                   
-            when STEP_WAIT_STATE =>
+            when STEP_STATE =>
                 if (TIMER_DONE = '1') then
                     if (FREQ_DONE = '1') then
                         next_state <= POST_INIT_STATE;
                     else
-                        next_state <= STEP_INCR_STATE;
+                        next_state <= STEP_INIT_STATE;
                     end if;
                 end if;
-                  
-            when STEP_INCR_STATE =>
-                next_state <= STEP_WAIT_STATE;
                   
             when POST_INIT_STATE =>
                 next_state <= POST_STATE;
@@ -123,84 +128,68 @@ begin
             when POST_STATE =>
                 if (TIMER_DONE = '1') then
                     if (CYCLE_DONE = '1') then
-                        next_state <= VALID_IN_WAIT_STATE;
+                        next_state <= VALID_IN_STATE;
                     else
-                        next_state <= PRE_INIT_STATE;
+                        next_state <= SAMPLE_SYNC_STATE;
                     end if;
                 end if;
                                                       
             when others =>
-                next_state <= VALID_IN_WAIT_STATE;         
+                next_state <= VALID_IN_STATE;         
         end case;
           
     end process;
 
 
-FSM_output_logic: process (current_state) begin
-
-    -- defaults
-        READY_OUT           <= '0';
-        VALID_OUT           <= '0';
-        SCK_RST             <= '0';
-        COUNTER_EN          <= '0';
-        COUNTER_RST         <= '0';
-        SHIFT_IN_REG        <= '0';
-        SHIFT_OUT_REG       <= '0';
-        TRISTATE_EN         <= '1';
-        CS                  <= '0';
-        SCK                 <= '0';
-
-    case current_state is
-
-        -- INIT states
-        when READY_OUT_STATE        =>
-            READY_OUT       <= '1';
-            CS              <= '1';
-            SCK_RST         <= '1';
-            COUNTER_RST     <= '1';
-        when INIT_CS_H_WAIT_STATE   =>
-            CS              <= '1';
-            
-        -- WRITE states
-        when W_L_WAIT_STATE         =>
-            TRISTATE_EN     <= '0';
-        when W_H_WAIT_STATE         =>
-            SCK             <= '1';
-            TRISTATE_EN     <= '0';
-        when W_H_SHIFT_IN_STATE     =>
-            SCK             <= '1';
-            SHIFT_IN_REG    <= '1';
-            TRISTATE_EN     <= '0';
-            COUNTER_EN      <= '1';
-            
-        -- READ states
-        when R_L_WAIT_STATE         =>
-        when R_H_WAIT_STATE         =>
-            SCK             <= '1';
-        when R_H_SHIFT_OUT_STATE    =>
-            SCK             <= '1';
-            SHIFT_OUT_REG   <= '1';
-            COUNTER_EN      <= '1';
-            
-        -- FINAL states
-        when CS_L_WAIT_STATE_0      =>
-            SCK             <= '1';
-        when CS_L_WAIT_STATE_1      =>
-            SCK             <= '1';
-        when CS_H_WAIT_STATE_0      =>
-            SCK             <= '1';
-            CS              <= '1';
-        when CS_H_WAIT_STATE_1      =>
-            SCK             <= '1';
-            CS              <= '1';
-        when R_VALID_OUT_STATE      =>
-            VALID_OUT       <= '1';
-            CS              <= '1';
+    FSM_output_logic: process (current_state) begin
+    
+        -- defaults
+        TIMER_MODE_PRE  <= '0';
+        TIMER_MODE_STEP <= '0';
+        TIMER_MODE_POST <= '0';
+        TIMER_EN        <= '0';
+        TIMER_RST       <= '0';
+        FREQ_RST        <= '0';
+        FREQ_EN         <= '0';
+        CYCLE_RST       <= '0';
+        CYCLE_EN        <= '0';
+        SAMPLE_RST      <= '0';
+        SAMPLE_EN       <= '0';
+    
+        case current_state is
         
-        when others =>
-            -- default
-    end case;
-
-end process;
+            when VALID_IN_STATE         =>
+                CYCLE_RST       <= '1';
+            when SAMPLE_SYNC_STATE      =>
+                SAMPLE_RST      <= '1';
+            when PRE_INIT_STATE         =>
+                CYCLE_EN        <= '1';
+                FREQ_RST        <= '1';
+                TIMER_MODE_PRE  <= '1';
+                TIMER_RST       <= '1';
+            when PRE_STATE              =>
+                TIMER_MODE_PRE  <= '1';
+                TIMER_EN        <= '1';
+                SAMPLE_EN       <= '1';
+            when STEP_INIT_STATE        =>
+                TIMER_MODE_STEP <= '1';
+                TIMER_RST       <= '1';                  
+                FREQ_EN         <= '1';
+            when STEP_STATE             =>
+                TIMER_MODE_STEP <= '1';
+                TIMER_EN        <= '1';                  
+                SAMPLE_EN       <= '1';
+            when POST_INIT_STATE        =>
+                TIMER_MODE_POST <= '1';
+                TIMER_RST       <= '1';                  
+            when POST_STATE             =>
+                TIMER_MODE_POST <= '1';
+                TIMER_EN        <= '1';                  
+                SAMPLE_EN       <= '1';
+            when others                 =>
+                -- defaults
+        end case;
+    
+    end process;
 
 end Behavioral;
