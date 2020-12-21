@@ -22,6 +22,9 @@ entity FreqBurstFSM is
         TIMER_MODE_PRE  : out STD_LOGIC;
         TIMER_MODE_STEP : out STD_LOGIC;
         TIMER_MODE_POST : out STD_LOGIC;
+        ZERO_PRE        : in STD_LOGIC;
+        ZERO_STEP       : in STD_LOGIC;
+        ZERO_POST       : in STD_LOGIC;
         TIMER_EN        : out STD_LOGIC;
         TIMER_RST       : out STD_LOGIC;
         TIMER_DONE      : in STD_LOGIC;
@@ -29,7 +32,6 @@ entity FreqBurstFSM is
         FREQ_RST        : out STD_LOGIC;
         FREQ_EN         : out STD_LOGIC;
         FREQ_DONE       : in STD_LOGIC;
-        ZERO_STEP_TIME  : in STD_LOGIC;
         
         CYCLE_RST       : out STD_LOGIC;
         CYCLE_EN        : out STD_LOGIC;
@@ -80,7 +82,9 @@ begin
         TIMER_DONE,
         FREQ_DONE,
         CYCLE_DONE,
-        ZERO_STEP_TIME,
+        ZERO_PRE,
+        ZERO_STEP,
+        ZERO_POST,
         SAMPLE
     ) begin
   
@@ -99,11 +103,15 @@ begin
                 end if;
         
             when PRE_INIT_STATE =>
-                next_state <= PRE_STATE;
+                if (ZERO_PRE = '1') then
+                    next_state <= STEP_INIT_STATE;
+                else
+                    next_state <= PRE_STATE;
+                end if;
         
             when PRE_STATE =>
                 if (TIMER_DONE = '1') then
-                    if (ZERO_STEP_TIME = '1') then
+                    if (ZERO_STEP = '1') then
                         next_state <= POST_INIT_STATE;
                     else
                         next_state <= STEP_INIT_STATE;
@@ -111,7 +119,11 @@ begin
                 end if;
                   
             when STEP_INIT_STATE =>
-                next_state <= STEP_STATE;
+                if (ZERO_STEP = '1') then
+                    next_state <= POST_INIT_STATE;
+                else
+                    next_state <= STEP_STATE;
+                end if;
                   
             when STEP_STATE =>
                 if (TIMER_DONE = '1') then
@@ -123,7 +135,15 @@ begin
                 end if;
                   
             when POST_INIT_STATE =>
-                next_state <= POST_STATE;
+                if (ZERO_POST = '1') then
+                    if (CYCLE_DONE = '1') then
+                        next_state <= VALID_IN_STATE;
+                    else
+                        next_state <= SAMPLE_SYNC_STATE;
+                    end if;
+                else
+                    next_state <= POST_STATE;
+                end if;
                   
             when POST_STATE =>
                 if (TIMER_DONE = '1') then
