@@ -10,6 +10,7 @@ use UNIMACRO.vcomponents.all;
 
 
 entity PacketSerialFullDuplex is
+    -- Serial baud rate is clk_freq/100
     generic (
         RX_HEADER_BYTES         : positive := 2;
         RX_DATA_BYTES           : positive := 8;
@@ -24,12 +25,12 @@ entity PacketSerialFullDuplex is
         SERIAL_TX               : out std_logic;
         SERIAL_ALARM            : out std_logic_vector(1 downto 0);
 
-		-- RX data (8 bytes)
+		-- RX data
         VALID_OUT               : out std_logic;
         RX_HEADER		        : in std_logic_vector(RX_HEADER_BYTES*8-1 downto 0);
         RX_DATA  		        : out std_logic_vector(RX_DATA_BYTES*8-1 downto 0);
         
-		-- TX data (8 bytes)
+		-- TX data
         VALID_IN                : in std_logic;
         TX_HEADER		        : in std_logic_vector(TX_HEADER_BYTES*8-1 downto 0);
         TX_DATA  		        : in std_logic_vector(TX_DATA_BYTES*8-1 downto 0)
@@ -41,10 +42,10 @@ architecture Behavioral of PacketSerialFullDuplex is
 
 	-- RX signals
   signal packet_rx_valid_sig    : std_logic;
-  signal packet_rx_data_sig     : std_logic_vector(8*8-1 downto 0);
+  signal packet_rx_data_sig     : std_logic_vector(RX_DATA_BYTES*8-1 downto 0);
   signal serial_rx_valid_sig    : std_logic;
   signal serial_rx_data_sig     : std_logic_vector(7 downto 0);
-  signal rx_header_sig          : std_logic_vector(15 downto 0);
+  signal rx_header_sig          : std_logic_vector(RX_HEADER_BYTES*8-1 downto 0);
 
 	-- TX signals
   signal fifo_tx_ready_sig      : std_logic;
@@ -53,11 +54,11 @@ architecture Behavioral of PacketSerialFullDuplex is
   signal packet_tx_ready_sig    : std_logic;
   signal packet_tx_valid_sig    : std_logic;
   signal uart_tx_ready_sig      : std_logic;
-  signal fifo_tx_in_sig         : std_logic_vector(8*8-1 downto 0);
-  signal fifo_tx_out_sig        : std_logic_vector(8*8-1 downto 0);
-  signal packet_tx_data_sig     : std_logic_vector(8*(8+2)-1 downto 0);  -- TX data includes header
+  signal fifo_tx_in_sig         : std_logic_vector(TX_DATA_BYTES*8-1 downto 0);
+  signal fifo_tx_out_sig        : std_logic_vector(TX_DATA_BYTES*8-1 downto 0);
+  signal packet_tx_data_sig     : std_logic_vector((TX_DATA_BYTES+TX_HEADER_BYTES)*8-1 downto 0);  -- TX data includes header
   signal packet_tx_symbol_sig   : std_logic_vector(7 downto 0);
-  signal tx_header_sig          : std_logic_vector(15 downto 0);
+  signal tx_header_sig          : std_logic_vector(TX_HEADER_BYTES*8-1 downto 0);
 
 
 begin    
@@ -114,31 +115,28 @@ begin
     -- TX
     ----------------------------------------------
 
-    tx_header_sig <= x"0102";
-    fifo_tx_in_sig <= I_ADC & Q_ADC & CYCLE_COUNT & SAMPLE_COUNT & FREQ_DIV;
-
     FIFO_Tx_module : FIFO_SYNC_MACRO
         generic map (
-    --        DEVICE              => "7SERIES",             -- Target Device: "VIRTEX5, "VIRTEX6", "7SERIES" 
-    --        ALMOST_FULL_OFFSET  => X"0080",               -- Sets almost full threshold
-    --        ALMOST_EMPTY_OFFSET => X"0080",               -- Sets the almost empty threshold
-            DATA_WIDTH          => 8*8,                    -- Valid values are 1-72 (37-72 only valid when FIFO_SIZE="36Kb")
-            FIFO_SIZE           => "36Kb"               -- Target BRAM, "18Kb" or "36Kb" 
+--            DEVICE              => "7SERIES",               -- Target Device: "VIRTEX5, "VIRTEX6", "7SERIES" 
+--            ALMOST_FULL_OFFSET  => X"0080",                 -- Sets almost full threshold
+--            ALMOST_EMPTY_OFFSET => X"0080",                 -- Sets the almost empty threshold
+            DATA_WIDTH          => TX_DATA_BYTES*8,         -- Valid values are 1-72 (37-72 only valid when FIFO_SIZE="36Kb")
+            FIFO_SIZE           => "36Kb"                   -- Target BRAM, "18Kb" or "36Kb" 
         )
         port map (
-            CLK                 => CLK,                 -- 1-bit input clock
-            RST                 => RST,                 -- 1-bit input reset
+            CLK                 => CLK,                     -- 1-bit input clock
+            RST                 => RST,                     -- 1-bit input reset
             -- input path
-            DI                  => fifo_tx_in_sig,        -- Input data, width defined by DATA_WIDTH parameter
-            WREN                => VALID_IN,       -- 1-bit input write enable
+            DI                  => fifo_tx_in_sig,          -- Input data, width defined by DATA_WIDTH parameter
+            WREN                => VALID_IN,                -- 1-bit input write enable
             -- output path
-            DO                  => fifo_tx_out_sig,       -- Output data, width defined by DATA_WIDTH parameter
-            RDEN                => fifo_tx_ready_sig,        -- 1-bit input read enable
-            EMPTY               => fifo_tx_not_valid_sig   -- 1-bit output empty
+            DO                  => fifo_tx_out_sig,         -- Output data, width defined by DATA_WIDTH parameter
+            RDEN                => fifo_tx_ready_sig,       -- 1-bit input read enable
+            EMPTY               => fifo_tx_not_valid_sig    -- 1-bit output empty
         );
         
     fifo_tx_valid_sig <= not fifo_tx_not_valid_sig;
-    packet_tx_data_sig <= tx_header_sig & fifo_tx_out_sig;
+    packet_tx_data_sig <= TX_HEADER & fifo_tx_out_sig;
 
     PacketTx_module: entity work.PacketTx
         generic map (

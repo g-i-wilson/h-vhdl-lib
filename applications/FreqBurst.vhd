@@ -15,10 +15,9 @@ entity FreqBurst is
         CLK                     : in std_logic;
         RST                     : in std_logic;
 
-        I_CMP_IN                : in std_logic;
-        I_INV_OUT               : out std_logic;
-        Q_CMP_IN                : in std_logic;
-        Q_INV_OUT               : out std_logic;
+        SAMPLE                  : out std_logic;
+        I_SIGNAL                : in std_logic_vector(15 downto 0);
+        Q_SIGNAL                : in std_logic_vector(15 downto 0);
 
         RF_EN                   : out std_logic;
         RF_FREQ                 : out std_logic_vector(3 downto 0);
@@ -84,7 +83,7 @@ architecture Behavioral of FreqBurst is
 begin
 
     --------------------------------------------------------------
-    -- FSM & sample rate control
+    -- FSM & sample rate
     --------------------------------------------------------------
     
     process (timer_mode_pre_sig, timer_mode_step_sig, timer_mode_post_sig, time_pre_sig, time_step_sig, time_post_sig) begin
@@ -136,7 +135,7 @@ begin
             STATE           => fsm_state_sig
         );
 
-    ADC_sample_rate : entity work.PulseGenerator
+    sample_rate : entity work.PulseGenerator
     generic map (
         WIDTH                       => 8
     )
@@ -148,41 +147,8 @@ begin
         INIT_PERIOD                 => x"63",
         PULSE                       => adc_sample_sig
     );
-
-
-    --------------------------------------------------------------
-    -- ADCs
-    --------------------------------------------------------------
-
-    I_ADC: entity work.ADCSimpleDeltaSigma
-        generic map (
-            ADC_PERIOD_WIDTH        => 8,
-            SIG_OUT_WIDTH    		=> 16
-        )
-        port map (
-            CLK                     => CLK,
-            RST                     => RST,
-            CMP_IN                  => I_CMP_IN,
-            EN_SAMPLE               => adc_sample_sig,
-            EN_OUT                  => adc_sample_sig,
-            INV_OUT                 => I_INV_OUT,
-            SIG_OUT                 => i_out_sig
-        );
-
-    Q_ADC: entity work.ADCSimpleDeltaSigma
-        generic map (
-            ADC_PERIOD_WIDTH        => 8,
-            SIG_OUT_WIDTH    		=> 16
-        )
-        port map (
-            CLK                     => CLK,
-            RST                     => RST,
-            CMP_IN                  => Q_CMP_IN,
-            EN_SAMPLE               => adc_sample_sig,
-            EN_OUT                  => adc_sample_sig,
-            INV_OUT                 => Q_INV_OUT,
-            SIG_OUT                 => q_out_sig
-        );
+    
+    SAMPLE <= adc_sample_sig;
 
 
     --------------------------------------------------------------
@@ -230,8 +196,8 @@ begin
     packet_tx_header_sig <= x"0102" when 
     
     packet_tx_data_sig <=
-        i_out_sig &         -- 2 bytes
-        q_out_sig &         -- 2 bytes
+        I_SIGNAL &          -- 2 bytes
+        Q_SIGNAL &          -- 2 bytes
         freq_div_sig &      -- 1 byte
         cycle_count_sig &   -- 1 byte
         sample_count_sig ;  -- 2 bytes

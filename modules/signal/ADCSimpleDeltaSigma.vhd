@@ -12,7 +12,6 @@ use UNISIM.VComponents.all;
 
 entity ADCSimpleDeltaSigma is
     generic (
-        ADC_PERIOD_WIDTH        : positive := 8;
         SIG_OUT_WIDTH    		: positive := 12
     );
     port (
