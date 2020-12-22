@@ -15,13 +15,13 @@ entity FreqBurstFSM is
         CLK             : in STD_LOGIC;
         RST             : in STD_LOGIC;
         
+        READY_OUT       : out STD_LOGIC;
         VALID_IN        : in STD_LOGIC;
 
-        SAMPLE          : in STD_LOGIC;
+        SAMPLE_IN       : in STD_LOGIC;
 
-        TIMER_MODE_PRE  : out STD_LOGIC;
-        TIMER_MODE_STEP : out STD_LOGIC;
-        TIMER_MODE_POST : out STD_LOGIC;
+        SEGMENT         : out STD_LOGIC_VECTOR(1 downto 0); -- gray-code output to select segment of the frequency burst cycle
+
         ZERO_PRE        : in STD_LOGIC;
         ZERO_STEP       : in STD_LOGIC;
         ZERO_POST       : in STD_LOGIC;
@@ -47,17 +47,18 @@ end FreqBurstFSM;
 
 architecture Behavioral of FreqBurstFSM is
 
-constant VALID_IN_STATE             : std_logic_vector(3 downto 0) := x"0";
-constant SAMPLE_SYNC_STATE          : std_logic_vector(3 downto 0) := x"1";
-constant PRE_INIT_STATE             : std_logic_vector(3 downto 0) := x"2";
-constant PRE_STATE                  : std_logic_vector(3 downto 0) := x"3";
-constant STEP_INIT_STATE            : std_logic_vector(3 downto 0) := x"4";
-constant STEP_STATE                 : std_logic_vector(3 downto 0) := x"5";
-constant POST_INIT_STATE            : std_logic_vector(3 downto 0) := x"6";
-constant POST_STATE                 : std_logic_vector(3 downto 0) := x"7";
+constant READY_OUT_STATE            : std_logic_vector(3 downto 0) := x"0";
+constant CYCLE_RST_STATE            : std_logic_vector(3 downto 0) := x"1";
+constant SAMPLE_SYNC_STATE          : std_logic_vector(3 downto 0) := x"2";
+constant PRE_INIT_STATE             : std_logic_vector(3 downto 0) := x"3";
+constant PRE_STATE                  : std_logic_vector(3 downto 0) := x"4";
+constant STEP_INIT_STATE            : std_logic_vector(3 downto 0) := x"5";
+constant STEP_STATE                 : std_logic_vector(3 downto 0) := x"6";
+constant POST_INIT_STATE            : std_logic_vector(3 downto 0) := x"7";
+constant POST_STATE                 : std_logic_vector(3 downto 0) := x"8";
 
-signal current_state                : std_logic_vector(3 downto 0) := PRE_INIT_STATE;
-signal next_state                   : std_logic_vector(3 downto 0) := PRE_INIT_STATE;
+signal current_state                : std_logic_vector(3 downto 0) := READY_OUT_STATE;
+signal next_state                   : std_logic_vector(3 downto 0) := READY_OUT_STATE;
 
 
 begin
@@ -65,7 +66,7 @@ begin
     FSM_state_register: process (CLK) begin
         if rising_edge(CLK) then
             if (RST = '1') then
-                current_state <= PRE_INIT_STATE;
+                current_state <= READY_OUT_STATE;
             else
                 current_state <= next_state;
             end if;
@@ -85,20 +86,23 @@ begin
         ZERO_PRE,
         ZERO_STEP,
         ZERO_POST,
-        SAMPLE
+        SAMPLE_IN
     ) begin
   
         next_state <= current_state;
         
         case current_state is
         
-            when VALID_IN_STATE =>
+            when READY_OUT_STATE =>
                 if (VALID_IN = '1') then
-                    next_state <= SAMPLE_SYNC_STATE;
+                    next_state <= CYCLE_RST_STATE;
                 end if;
         
+            when CYCLE_RST_STATE =>
+                next_state <= SAMPLE_SYNC_STATE;
+        
             when SAMPLE_SYNC_STATE =>
-                if (SAMPLE = '1') then
+                if (SAMPLE_IN = '1') then
                     next_state <= PRE_INIT_STATE;
                 end if;
         
@@ -137,7 +141,7 @@ begin
             when POST_INIT_STATE =>
                 if (ZERO_POST = '1') then
                     if (CYCLE_DONE = '1') then
-                        next_state <= VALID_IN_STATE;
+                        next_state <= READY_OUT_STATE;
                     else
                         next_state <= SAMPLE_SYNC_STATE;
                     end if;
@@ -148,14 +152,14 @@ begin
             when POST_STATE =>
                 if (TIMER_DONE = '1') then
                     if (CYCLE_DONE = '1') then
-                        next_state <= VALID_IN_STATE;
+                        next_state <= READY_OUT_STATE;
                     else
                         next_state <= SAMPLE_SYNC_STATE;
                     end if;
                 end if;
                                                       
             when others =>
-                next_state <= VALID_IN_STATE;         
+                next_state <= READY_OUT_STATE;         
         end case;
           
     end process;
@@ -164,9 +168,8 @@ begin
     FSM_output_logic: process (current_state) begin
     
         -- defaults
-        TIMER_MODE_PRE  <= '0';
-        TIMER_MODE_STEP <= '0';
-        TIMER_MODE_POST <= '0';
+        READY_OUT       <= '0';
+        SEGMENT         <= "00";
         TIMER_EN        <= '0';
         TIMER_RST       <= '0';
         FREQ_RST        <= '0';
@@ -178,32 +181,37 @@ begin
     
         case current_state is
         
-            when VALID_IN_STATE         =>
+            when READY_OUT_STATE        =>
+                READY_OUT       <= '1';
+                SEGMENT         <= "00";
+            when CYCLE_RST_STATE        =>
+                SEGMENT         <= "01";
                 CYCLE_RST       <= '1';
             when SAMPLE_SYNC_STATE      =>
+                SEGMENT         <= "01";
                 SAMPLE_RST      <= '1';
             when PRE_INIT_STATE         =>
+                SEGMENT         <= "01";
                 CYCLE_EN        <= '1';
                 FREQ_RST        <= '1';
-                TIMER_MODE_PRE  <= '1';
                 TIMER_RST       <= '1';
             when PRE_STATE              =>
-                TIMER_MODE_PRE  <= '1';
+                SEGMENT         <= "01";
                 TIMER_EN        <= '1';
                 SAMPLE_EN       <= '1';
             when STEP_INIT_STATE        =>
-                TIMER_MODE_STEP <= '1';
+                SEGMENT         <= "11";
                 TIMER_RST       <= '1';                  
                 FREQ_EN         <= '1';
             when STEP_STATE             =>
-                TIMER_MODE_STEP <= '1';
+                SEGMENT         <= "11";
                 TIMER_EN        <= '1';                  
                 SAMPLE_EN       <= '1';
             when POST_INIT_STATE        =>
-                TIMER_MODE_POST <= '1';
+                SEGMENT         <= "10";
                 TIMER_RST       <= '1';                  
             when POST_STATE             =>
-                TIMER_MODE_POST <= '1';
+                SEGMENT         <= "10";
                 TIMER_EN        <= '1';                  
                 SAMPLE_EN       <= '1';
             when others                 =>
