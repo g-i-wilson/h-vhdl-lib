@@ -140,7 +140,7 @@ begin
         P_IMAG                  => freq_im_sig
     );
 
-    phase_diff_coupler: entity work.BitWidthCoupler
+    RE_phase_diff_coupler: entity work.BitWidthCoupler
     generic map (
         SIG_IN_WIDTH            => SIG_IN_WIDTH,
         SIG_OUT_WIDTH           => 4
@@ -154,7 +154,7 @@ begin
         SIG_OUT                 => phase_diff_re_resized_sig
     );
 
-    phase_diff_coupler: entity work.BitWidthCoupler
+    IM_phase_diff_coupler: entity work.BitWidthCoupler
     generic map (
         SIG_IN_WIDTH            => SIG_IN_WIDTH,
         SIG_OUT_WIDTH           => 4

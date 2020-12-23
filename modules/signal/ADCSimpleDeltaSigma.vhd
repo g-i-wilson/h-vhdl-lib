@@ -24,7 +24,6 @@ entity ADCSimpleDeltaSigma is
         CMP_IN                  : in std_logic;
         INV_OUT                 : out std_logic;
 
-        VALID                   : out std_logic;
         SIG_OUT                 : out std_logic_vector(SIG_OUT_WIDTH-1 downto 0)
     );
 end ADCSimpleDeltaSigma;

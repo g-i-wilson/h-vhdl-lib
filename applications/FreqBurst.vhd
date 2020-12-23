@@ -12,373 +12,218 @@ use UNISIM.VComponents.all;
 
 entity FreqBurst is
     generic (
+    	-- Sample rate
+        SAMPLE_PERIOD           : positive := 99;   -- units of clock cycles (minus 1)
         SAMPLE_PERIOD_WIDTH     : positive := 8;
-        CYCLES_WIDTH            : positive := 8;
-        RF_FREQ_WIDTH           : positive := 4;
-        RF_DIV_PERIOD_WIDTH     : positive := 8;
-        SAMPLE_COUNT_WIDTH      : positive := 16
+        -- Serial rate
+        SERIAL_RATE             : positive := 99;   -- units of clock cycles (minus 1)
+        -- RF freq (DAC)
+        RF_FREQ_WIDTH           : positive := 4;    -- width of output vlaues to DAC controlling RF freq
+        -- RF div
+        RF_DIV_PERIOD_WIDTH     : positive := 8;    -- width of div-freq period (units of clock cycles)
+        RF_DIV_MA_LENGTH        : positive := 4;    -- number of samples in MA filter
+        RF_DIV_MA_SUM_WIDTH     : positive := 12;   -- width of div-freq MA sum
+        RF_DIV_MA_SUM_SHIFT     : positive := 2;    -- divide the MA sum by shifting
+        -- cycles
+        CYCLE_COUNT_WIDTH       : positive := 8;    -- width of cycles-1 total & width of cycle count
+        -- samples
+        SAMPLE_COUNT_WIDTH      : positive := 16;   -- width of samples-1 totals & width of sample counts
+        -- I & Q (ADCs)
+        ADC_WIDTH               : positive := 16    -- width of I & Q data input from ADCs
     );
     port (
         CLK                     : in std_logic;
         RST                     : in std_logic;        
-        
-        -- settings
-        SAMPLE_PERIOD           : in std_logic_vector(SAMPLE_PERIOD_WIDTH-1 downto 0);
-        
-        -- upstream handshake
-        VALID_IN                : in std_logic;
-        READY_OUT               : out std_logic;
-
-        -- input data
-        -- cycles-1 (total number of repeated cycles with same start/step/end frequency)
-        CYCLES                  : in std_logic_vector(CYCLES_WIDTH-1 downto 0);
-        -- start frequency
-        RF_FREQ_START           : in std_logic_vector(RF_FREQ_WIDTH-1 downto 0);
-        -- end frequency
-        RF_FREQ_END             : in std_logic_vector(RF_FREQ_WIDTH-1 downto 0);
-        -- divided-down RF frequency input (idealy should be lower than sample rate to prevent skipping period samples)
-        RF_FREQ_DIV             : in std_logic;
-        -- PRE segment duration (units of samples)
-        PRE_DURATION            : in std_logic_vector(SAMPLE_COUNT_WIDTH-1 downto 0);
-        -- STEP segment duration (each step; units of samples; total STEP segment duration is freq_delta*step_duration)
-        STEP_DURATION           : in std_logic_vector(SAMPLE_COUNT_WIDTH-1 downto 0);
-        -- POST segment duration (units of samples)
-        POST_DURATION           : in std_logic_vector(SAMPLE_COUNT_WIDTH-1 downto 0);
-        
-        -- output data & control
-        -- ADC sample pulse
-        SAMPLE_PULSE            : out std_logic;
-        -- control output frequency setting
+        -- RF freq (simple DAC)
         RF_FREQ                 : out std_logic_vector(RF_FREQ_WIDTH-1 downto 0);
-        -- output period of divided-down RF frequency (in units of clock cycles)
-        RF_FREQ_DIV_PERIOD      : out std_logic_vector(RF_DIV_PERIOD_WIDTH-1 downto 0);
-        -- output cycle count (contiguous cycles with same start/step/end frequency)
-        CYCLE_COUNT             : out std_logic_vector(CYCLES_WIDTH-1 downto 0);
-        -- output sample count (sample count in the current cycle)
-        SAMPLE_COUNT            : out std_logic_vector(SAMPLE_COUNT_WIDTH-1 downto 0);
-
-        -- downstream valid
-        VALID_OUT               : out std_logic;
-        
-        
-        -- debug
-        STATE                   : out std_logic_vector(3 downto 0)
+        -- RF div
+        RF_DIV                  : in std_logic;        
+        -- I & Q (simple delta-sigma ADCs)
+        I_ADC_CMP               : in std_logic;
+        I_ADC_INV               : out std_logic;
+        Q_ADC_CMP               : in std_logic;
+        Q_ADC_INV               : out std_logic;
+        -- Serial IO
+        RX                      : in std_logic;
+        TX                      : out std_logic
     );
 end FreqBurst;
 
 
 architecture Behavioral of FreqBurst is
 
-    -- FSM & control signals
-    signal adc_sample_sig           : std_logic;
-    signal timer_en_sig             : std_logic;
-    signal timer_en_fsm_sig         : std_logic;
-    signal timer_done_sig           : std_logic;
-    signal timer_rst_sig            : std_logic;
-    signal timer_rst_fsm_sig        : std_logic;
-    signal timer_end_sig            : std_logic_vector(SAMPLE_COUNT_WIDTH-1 downto 0);
-    signal freq_counter_en_sig      : std_logic;
-    signal freq_counter_done_sig    : std_logic;
-    signal freq_counter_rst_sig     : std_logic;
-    signal freq_counter_rst_fsm_sig : std_logic;
-    signal freq_count_sig           : std_logic_vector(RF_FREQ_WIDTH-1 downto 0);
-    signal freq_out_sig             : std_logic_vector(RF_FREQ_WIDTH-1 downto 0);
-    signal cycle_en_sig             : std_logic;
-    signal cycle_done_sig           : std_logic;
-    signal cycle_rst_sig            : std_logic;
-    signal cycle_rst_fsm_sig        : std_logic;
-    signal sample_en_sig            : std_logic;
-    signal sample_en_fsm_sig        : std_logic;
-    signal sample_rst_sig           : std_logic;
-    signal sample_rst_fsm_sig       : std_logic;
-    signal zero_pre_sig             : std_logic;
-    signal zero_step_sig            : std_logic;
-    signal zero_post_sig            : std_logic;
-    signal segment_sig              : std_logic_vector(1 downto 0);
-
-    -- RX data signals
-    signal cycle_end_sig            : std_logic_vector(CYCLES_WIDTH-1 downto 0);
-    signal freq_start_sig           : std_logic_vector(RF_FREQ_WIDTH-1 downto 0);
-    signal freq_end_sig             : std_logic_vector(RF_FREQ_WIDTH-1 downto 0);
-    signal time_pre_sig             : std_logic_vector(SAMPLE_COUNT_WIDTH-1 downto 0);
-    signal time_step_sig            : std_logic_vector(SAMPLE_COUNT_WIDTH-1 downto 0);
-    signal time_post_sig            : std_logic_vector(SAMPLE_COUNT_WIDTH-1 downto 0);
-
-    -- TX data signals
-    signal freq_div_period_sig      : std_logic_vector(RF_DIV_PERIOD_WIDTH-1 downto 0);
-    signal cycle_count_sig          : std_logic_vector(RF_DIV_PERIOD_WIDTH-1 downto 0);
+    -- handshakes
+    signal rx_valid_out_sig         : std_logic;
+    signal ramp_ready_sig           : std_logic;
+    signal ramp_valid_out_sig       : std_logic;
+    -- RF freq
+    signal rx_ramp_start_sig        : std_logic_vector(RF_FREQ_WIDTH-1 downto 0);
+    signal rx_ramp_end_sig          : std_logic_vector(RF_FREQ_WIDTH-1 downto 0);
+    -- RF div
+    signal rf_div_ma_sum_sig        : std_logic_vector(RF_DIV_MA_SUM_WIDTH-1 downto 0);
+    signal rf_div_period_sig        : std_logic_vector(RF_DIV_PERIOD_WIDTH-1 downto 0);
+    -- Cycle total & count
+    signal rx_cycles_sig            : std_logic_vector(CYCLE_COUNT_WIDTH-1 downto 0);
+    signal cycle_count_sig          : std_logic_vector(CYCLE_COUNT_WIDTH-1 downto 0);
+    -- Sample totals & count
+    signal rx_pre_sig               : std_logic_vector(SAMPLE_COUNT_WIDTH-1 downto 0);
+    signal rx_step_sig              : std_logic_vector(SAMPLE_COUNT_WIDTH-1 downto 0);
+    signal rx_post_sig              : std_logic_vector(SAMPLE_COUNT_WIDTH-1 downto 0);
     signal sample_count_sig         : std_logic_vector(SAMPLE_COUNT_WIDTH-1 downto 0);
+    -- I & Q data (ADCs)
+    signal adc_sample_sig           : std_logic;
+    signal i_adc_sig                : std_logic_vector(ADC_WIDTH-1 downto 0);
+    signal q_adc_sig                : std_logic_vector(ADC_WIDTH-1 downto 0);
+    -- ramp FSM state
+    signal ramp_state_sig           : std_logic_vector(3 downto 0);
+    -- telemetry
+    signal serial_alarm_sig         : std_logic_vector(1 downto 0);
+    signal rx_data_sig              : std_logic_vector(8*8-1 downto 0);
+    signal tx_data_sig              : std_logic_vector(8*8-1 downto 0);
     
 begin
 
-    --------------------------------------------------------------
-    -- FSM & sample rate
-    --------------------------------------------------------------
+    I_ADC: entity work.ADCSimpleDeltaSigma
+        generic map (
+            SIG_OUT_WIDTH    		=> ADC_WIDTH
+        )
+        port map (
+            CLK                     => CLK,
+            RST                     => RST,
+                    
+            EN_SAMPLE               => adc_sample_sig,
+            EN_OUT                  => adc_sample_sig,
     
-    FSM: entity work.FreqBurstFSM
-        port map ( 
-            CLK             => CLK,
-            RST             => RST,
+            CMP_IN                  => I_ADC_CMP,
+            INV_OUT                 => I_ADC_INV,
+    
+            SIG_OUT                 => i_adc_sig
+        );
+    
+    Q_ADC: entity work.ADCSimpleDeltaSigma
+        generic map (
+            SIG_OUT_WIDTH    		=> ADC_WIDTH
+        )
+        port map (
+            CLK                     => CLK,
+            RST                     => RST,
+                    
+            EN_SAMPLE               => adc_sample_sig,
+            EN_OUT                  => adc_sample_sig,
+    
+            CMP_IN                  => Q_ADC_CMP,
+            INV_OUT                 => Q_ADC_INV,
+    
+            SIG_OUT                 => q_adc_sig
+        );
+    
+    RF_output_freq: entity work.RampSampling
+        generic map (
+            SAMPLE_PERIOD_WIDTH     => SAMPLE_PERIOD_WIDTH,
+            SAMPLE_COUNT_WIDTH      => SAMPLE_COUNT_WIDTH,
+            CYCLE_COUNT_WIDTH       => CYCLE_COUNT_WIDTH,
+            RAMP_WIDTH              => RF_FREQ_WIDTH
+        )
+        port map (
+            CLK                     => CLK,
+            RST                     => RST,        
             
-            READY_OUT       => READY_OUT,
-            VALID_IN        => VALID_IN,
-    
-            SAMPLE_IN      => adc_sample_sig,
-    
-            SEGMENT         => segment_sig,
-
-            TIMER_EN        => timer_en_fsm_sig,
-            TIMER_RST       => timer_rst_fsm_sig,
-            TIMER_DONE      => timer_done_sig,
-
-            ZERO_PRE        => zero_pre_sig,
-            ZERO_STEP       => zero_step_sig,
-            ZERO_POST       => zero_post_sig,
+            -- settings
+            SAMPLE_PERIOD           => std_logic_vector(to_unsigned(SAMPLE_PERIOD,SAMPLE_PERIOD_WIDTH)),
             
-            FREQ_RST        => freq_counter_rst_fsm_sig,
-            FREQ_EN         => freq_counter_en_sig,
-            FREQ_DONE       => freq_counter_done_sig,
-            
-            CYCLE_RST       => cycle_rst_fsm_sig,
-            CYCLE_EN        => cycle_en_sig,
-            CYCLE_DONE      => cycle_done_sig,
+            -- upstream handshake
+            VALID_IN                => rx_valid_out_sig,
+            READY_OUT               => ramp_ready_sig,
     
-            SAMPLE_RST      => sample_rst_fsm_sig,
-            SAMPLE_EN       => sample_en_fsm_sig,
+            -- input data
+            -- start frequency
+            RAMP_START              => rx_ramp_start_sig,
+            -- end frequency
+            RAMP_END                => rx_ramp_end_sig,
+            -- cycles-1 (total number of repeated cycles with same start/step/end)
+            CYCLES                  => rx_cycles_sig,
+            -- PRE segment duration (units of samples)
+            PRE_DURATION            => rx_pre_sig,
+            -- STEP segment duration (each step; units of samples; total duration of segment is ramp_delta*step_duration)
+            STEP_DURATION           => rx_step_sig,
+            -- POST segment duration (units of samples)
+            POST_DURATION           => rx_post_sig,
+            
+            -- output data & control
+            -- ADC sample pulse
+            SAMPLE_PULSE            => adc_sample_sig,
+            -- control output frequency setting
+            RAMP                    => RF_FREQ,
+            -- output cycle count (contiguous cycles with same start/step/end)
+            CYCLE_COUNT             => cycle_count_sig,
+            -- output sample count (sample count in the current cycle)
+            SAMPLE_COUNT            => sample_count_sig,
+    
+            -- downstream valid
+            VALID_OUT               => ramp_valid_out_sig,
             
             -- debug
-            STATE           => STATE
+            STATE                   => ramp_state_sig
         );
 
-    sample_rate : entity work.PulseGenerator
-    generic map (
-        WIDTH                       => SAMPLE_PERIOD_WIDTH
-    )
-    port map (
-        CLK                         => CLK,
-        EN                          => '1',
-        RST                         => RST,
-        PERIOD                      => SAMPLE_PERIOD,
-        INIT_PERIOD                 => SAMPLE_PERIOD,
-        PULSE                       => adc_sample_sig
-    );
-    
-    SAMPLE_PULSE <= adc_sample_sig; -- conituous sample pulses; this keeps the ADCs operating continuously, eliminating startup transiants
-    
-    VALID_OUT <= sample_en_sig; -- all the sample pulses that happen while sample_en_fsm_sig is on
-
-    --------------------------------------------------------------
-    -- segment MUX & zero-step signals
-    --------------------------------------------------------------
-
-    process (
-        segment_sig,
-        freq_start_sig,
-        freq_end_sig,
-        freq_count_sig,
-        time_pre_sig,
-        time_step_sig,
-        time_post_sig
-    ) begin
-        case segment_sig is
-            when "01" => 
-                freq_out_sig <= freq_start_sig;
-            when "11" =>
-                freq_out_sig <= freq_count_sig;
-            when "10" =>
-                freq_out_sig <= freq_end_sig;
-            when others =>
-                freq_out_sig <= freq_end_sig; -- maintain END frequency between bursts
-        end case;
-        case segment_sig is
-            when "01" => 
-                timer_end_sig <= time_pre_sig;
-            when "11" =>
-                timer_end_sig <= time_step_sig;
-            when "10" =>
-                timer_end_sig <= time_post_sig;
-            when others =>
-                timer_end_sig <= time_pre_sig;
-        end case;
-    end process;
-    
-    zero_pre_sig    <= '1' when time_pre_sig = x"0000" else '0';
-    zero_step_sig   <= '1' when time_step_sig = x"0000" else '0';
-    zero_post_sig   <= '1' when time_post_sig = x"0000" else '0';
-    
-    --------------------------------------------------------------
-    -- input registers
-    --------------------------------------------------------------
-
-    CYCLES_reg : entity work.Reg1D
-        generic map (
-            LENGTH      => CYCLES_WIDTH
-        )
-        port map (
-            CLK         => CLK,
-            RST         => RST,
-            PAR_EN      => VALID_IN,
-            PAR_IN      => CYCLES,
-            PAR_OUT     => cycle_end_sig
-        );
-        
-    RF_FREQ_START_reg : entity work.Reg1D
-        generic map (
-            LENGTH      => RF_FREQ_WIDTH
-        )
-        port map (
-            CLK         => CLK,
-            RST         => RST,
-            PAR_EN      => VALID_IN,
-            PAR_IN      => RF_FREQ_START,
-            PAR_OUT     => freq_start_sig
-        );
-        
-    RF_FREQ_END_reg : entity work.Reg1D
-        generic map (
-            LENGTH      => RF_FREQ_WIDTH
-        )
-        port map (
-            CLK         => CLK,
-            RST         => RST,
-            PAR_EN      => VALID_IN,
-            PAR_IN      => RF_FREQ_END,
-            PAR_OUT     => freq_end_sig
-        );
-        
-    PRE_DURATION_reg : entity work.Reg1D
-        generic map (
-            LENGTH      => SAMPLE_COUNT_WIDTH
-        )
-        port map (
-            CLK         => CLK,
-            RST         => RST,
-            PAR_EN      => VALID_IN,
-            PAR_IN      => PRE_DURATION,
-            PAR_OUT     => time_pre_sig
-        );
-        
-    STEP_DURATION_reg : entity work.Reg1D
-        generic map (
-            LENGTH      => SAMPLE_COUNT_WIDTH
-        )
-        port map (
-            CLK         => CLK,
-            RST         => RST,
-            PAR_EN      => VALID_IN,
-            PAR_IN      => STEP_DURATION,
-            PAR_OUT     => time_step_sig
-        );
-        
-    POST_DURATION_reg : entity work.Reg1D
-        generic map (
-            LENGTH      => SAMPLE_COUNT_WIDTH
-        )
-        port map (
-            CLK         => CLK,
-            RST         => RST,
-            PAR_EN      => VALID_IN,
-            PAR_IN      => POST_DURATION,
-            PAR_OUT     => time_post_sig
-        );
-        
-    --------------------------------------------------------------
-    -- counters and timers
-    --------------------------------------------------------------
-
-    PeriodDetector_module: entity work.PeriodDetector
+    RF_input_period: entity work.PeriodDetector
         generic map (
             SAMPLE_LENGTH           => 16,
             SUM_WIDTH               => 4,
             LOGIC_HIGH              => 13,
             LOGIC_LOW               => 2,
             SUM_START               => 7,
-            PERIOD_WIDTH            => RF_DIV_PERIOD_WIDTH
+            PERIOD_WIDTH            => RF_DIV_PERIOD_WIDTH,
+            MA_LENGTH               => RF_DIV_MA_LENGTH,
+            MA_SUM_WIDTH            => RF_DIV_MA_SUM_WIDTH
         )
         port map (
             CLK                     => CLK,
             RST                     => RST,
             EN                      => '1',
             
-            SIG_IN                  => RF_FREQ_DIV,
-            
-            PERIOD                  => RF_FREQ_DIV_PERIOD
+            SIG_IN                  => RF_DIV,
+            PERIOD                  => rf_div_period_sig
         );    
-    
-    timer_en_sig <= adc_sample_sig and timer_en_fsm_sig;
-    timer_rst_sig <= timer_rst_fsm_sig or RST;
-    
-    sample_timer : entity work.Timer
-        generic map (
-            WIDTH                   => SAMPLE_COUNT_WIDTH
-        )
-        port map (
-            CLK                     => CLK,
-            EN                      => timer_en_sig,
-            RST                     => timer_rst_sig,
-            COUNT_END               => timer_end_sig,
-    
-            DONE                    => timer_done_sig
-        );
-
-    freq_counter_rst_sig <= freq_counter_rst_fsm_sig or RST;
-
-    frequency_counter : entity work.TimerBidirectional
-        generic map (
-            WIDTH                   => RF_FREQ_WIDTH
-        )
-        port map (
-            CLK                     => CLK,
-            EN                      => freq_counter_en_sig,
-            RST                     => freq_counter_rst_sig,
-            COUNT_START             => freq_start_sig,
-            COUNT_END               => freq_end_sig,
-    
-            COUNT                   => freq_count_sig,
-            DONE                    => freq_counter_done_sig
-        );
-
-    freq_out_reg : entity work.Reg1D
-        generic map (
-            LENGTH      => RF_FREQ_WIDTH
-        )
-        port map (
-            CLK         => CLK,
-            RST         => RST,
-            PAR_EN      => '1',
-            PAR_IN      => freq_out_sig,
-            PAR_OUT     => RF_FREQ
-        );
         
-    cycle_rst_sig <= cycle_rst_fsm_sig or RST;
+    tx_data_sig <=  i_adc_sig & 
+                    q_adc_sig & 
+                    rf_div_period_sig & 
+                    cycle_count_sig & 
+                    sample_count_sig ;
 
-    cycle_counter : entity work.Timer
+    telemetry: entity work.PacketSerialFullDuplex
+        -- Serial baud rate is clk_freq/100
         generic map (
-            WIDTH                   => CYCLES_WIDTH
+            RX_HEADER_BYTES         => 2,
+            RX_DATA_BYTES           => 8,
+            TX_HEADER_BYTES         => 2,
+            TX_DATA_BYTES           => 8
         )
         port map (
             CLK                     => CLK,
-            EN                      => cycle_en_sig,
-            RST                     => cycle_rst_sig,
-            COUNT_END               => cycle_end_sig,
+            RST                     => RST,
+            
+            SERIAL_RX               => RX,
+            SERIAL_TX               => TX,
+            SERIAL_ALARM            => serial_alarm_sig,
     
-            COUNT                   => CYCLE_COUNT,
-            DONE                    => cycle_done_sig
+            -- RX data
+            VALID_OUT               => rx_valid_out_sig,
+            RX_HEADER		        => x"0102",
+            RX_DATA  		        => rx_data_sig,
+            
+            -- TX data
+            VALID_IN                => ramp_valid_out_sig,
+            TX_HEADER		        => x"0102",
+            TX_DATA  		        => tx_data_sig
         );
-        
-    sample_en_sig <= adc_sample_sig and sample_en_fsm_sig;
-    sample_rst_sig <= sample_rst_fsm_sig or RST;
     
-    sample_counter : entity work.Timer
-        generic map (
-            WIDTH                   => SAMPLE_COUNT_WIDTH
-        )
-        port map (
-            CLK                     => CLK,
-            EN                      => sample_en_sig,
-            RST                     => sample_rst_sig,
-    
-            COUNT                   => SAMPLE_COUNT
-        );
+    rx_ramp_start_sig   <= rx_data_sig(8*8-1 downto 8*7+4);
+    rx_ramp_end_sig     <= rx_data_sig(8*7+3 downto 8*7);
+    rx_cycles_sig       <= rx_data_sig(8*7-1 downto 8*6);
+    rx_pre_sig          <= rx_data_sig(8*6-1 downto 8*4);
+    rx_step_sig         <= rx_data_sig(8*4-1 downto 8*2);
+    rx_post_sig         <= rx_data_sig(8*2-1 downto 0);
 
 end Behavioral;
