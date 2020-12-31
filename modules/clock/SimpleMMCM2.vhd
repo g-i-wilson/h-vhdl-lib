@@ -35,6 +35,7 @@ architecture Behavioral of SimpleMMCM2 is
   signal mmcm_locked_sig      : std_logic;
 
   signal rst_in_sig           : std_logic := '1';
+  signal rst_out_sig          : std_logic := '1';
   signal clk_out_sig          : std_logic;
 
 begin
@@ -118,11 +119,12 @@ begin
 
 
   ------------------------------------------------
-  -- RST_IN or not LOCKED -> RST_OUT
+  -- not LOCKED -> RST_OUT
   ------------------------------------------------
 
-  rst_in_sig <= RST_IN or not mmcm_locked_sig;
+  rst_in_sig <= mmcm_locked_sig;
 
+  -- Synchronizer register starts by default as all 0s
   sync_rst : entity work.Synchronizer
   generic map (
     SYNC_LENGTH          => 3
@@ -131,7 +133,9 @@ begin
     RST             => '0',
     CLK             => clk_out_sig,
     SIG_IN        	=> rst_in_sig,
-    SIG_OUT         => RST_OUT
+    SIG_OUT         => rst_out_sig
   );
+  
+  RST_OUT <= not rst_out_sig;
 
 end Behavioral;

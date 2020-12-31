@@ -60,8 +60,9 @@ architecture Behavioral of FreqBurst is
     signal rx_ramp_start_sig        : std_logic_vector(RF_FREQ_WIDTH-1 downto 0);
     signal rx_ramp_end_sig          : std_logic_vector(RF_FREQ_WIDTH-1 downto 0);
     -- RF div
-    signal rf_div_ma_sum_sig        : std_logic_vector(RF_DIV_MA_SUM_WIDTH-1 downto 0);
     signal rf_div_period_sig        : std_logic_vector(RF_DIV_PERIOD_WIDTH-1 downto 0);
+    signal rf_div_ma_sum_sig        : std_logic_vector(RF_DIV_MA_SUM_WIDTH-1 downto 0);
+    signal rf_div_ma_filtered_sig   : std_logic_vector(RF_DIV_PERIOD_WIDTH-1 downto 0);
     -- Cycle total & count
     signal rx_cycles_sig            : std_logic_vector(CYCLE_COUNT_WIDTH-1 downto 0);
     signal cycle_count_sig          : std_logic_vector(CYCLE_COUNT_WIDTH-1 downto 0);
@@ -173,9 +174,7 @@ begin
             LOGIC_HIGH              => 13,
             LOGIC_LOW               => 2,
             SUM_START               => 7,
-            PERIOD_WIDTH            => RF_DIV_PERIOD_WIDTH,
-            MA_LENGTH               => RF_DIV_MA_LENGTH,
-            MA_SUM_WIDTH            => RF_DIV_MA_SUM_WIDTH
+            PERIOD_WIDTH            => RF_DIV_PERIOD_WIDTH
         )
         port map (
             CLK                     => CLK,
@@ -184,8 +183,26 @@ begin
             
             SIG_IN                  => RF_DIV,
             PERIOD                  => rf_div_period_sig
-        );    
-        
+        );  
+          
+    MAFilter_module : entity work.MAFilter
+        generic map (
+            SAMPLE_LENGTH       => 8,
+            SAMPLE_WIDTH        => RF_DIV_PERIOD_WIDTH,
+            SUM_WIDTH           => RF_DIV_PERIOD_WIDTH + 4,
+            SUM_START           => 0,
+            SIGNED_ARITHMETIC   => false
+        )
+        port map (
+            CLK             => CLK,
+            EN              => '1',
+            RST             => RST,
+            SIG_IN          => rf_div_period_sig,
+            SUM_OUT         => rf_div_ma_sum_sig
+        );
+
+    rf_div_ma_filtered_sig <= rf_div_ma_sum_sig(RF_DIV_PERIOD_WIDTH+3-1 downto 3);
+    
     tx_data_sig <=  i_adc_sig & 
                     q_adc_sig & 
                     rf_div_period_sig & 

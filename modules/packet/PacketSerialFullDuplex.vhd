@@ -54,7 +54,6 @@ architecture Behavioral of PacketSerialFullDuplex is
   signal packet_tx_ready_sig    : std_logic;
   signal packet_tx_valid_sig    : std_logic;
   signal uart_tx_ready_sig      : std_logic;
-  signal fifo_tx_in_sig         : std_logic_vector(TX_DATA_BYTES*8-1 downto 0);
   signal fifo_tx_out_sig        : std_logic_vector(TX_DATA_BYTES*8-1 downto 0);
   signal packet_tx_data_sig     : std_logic_vector((TX_DATA_BYTES+TX_HEADER_BYTES)*8-1 downto 0);  -- TX data includes header
   signal packet_tx_symbol_sig   : std_logic_vector(7 downto 0);
@@ -127,7 +126,7 @@ begin
             CLK                 => CLK,                     -- 1-bit input clock
             RST                 => RST,                     -- 1-bit input reset
             -- input path
-            DI                  => fifo_tx_in_sig,          -- Input data, width defined by DATA_WIDTH parameter
+            DI                  => TX_DATA,                 -- Input data, width defined by DATA_WIDTH parameter
             WREN                => VALID_IN,                -- 1-bit input write enable
             -- output path
             DO                  => fifo_tx_out_sig,         -- Output data, width defined by DATA_WIDTH parameter

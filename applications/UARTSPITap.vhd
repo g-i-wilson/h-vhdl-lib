@@ -118,12 +118,12 @@ begin
         TX                  => TX
     );
 
-    ila0: entity work.ila_uartspitap
-    port map (
-        CLK => CLK,
-        probe0 => spitap_valid_sig & mux_valid_sig & fifo_valid_sig & tx_ready_sig & "0000",
-        probe1 => mux_data_sig,
-        probe2 => fifo_data_sig
-    );
+--    ila0: entity work.ila_uartspitap
+--    port map (
+--        CLK => CLK,
+--        probe0 => spitap_valid_sig & mux_valid_sig & fifo_valid_sig & tx_ready_sig & "0000",
+--        probe1 => mux_data_sig,
+--        probe2 => fifo_data_sig
+--    );
 
 end Behavioral;
