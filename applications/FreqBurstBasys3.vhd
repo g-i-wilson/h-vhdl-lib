@@ -68,6 +68,10 @@ begin
     );
 
     led(1) <= rst_sig;
+    
+    JA_7 <= sw_sig(15);
+    
+    led(15) <= sw_sig(15);
 
     FreqBurst_module: entity work.FreqBurst
         generic map (
