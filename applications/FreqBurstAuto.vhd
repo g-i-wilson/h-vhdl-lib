@@ -10,7 +10,7 @@ use IEEE.NUMERIC_STD.ALL;
 library UNISIM;
 use UNISIM.VComponents.all;
 
-entity FreqBurst is
+entity FreqBurstAuto is
     generic (
     	-- Sample rate
         SAMPLE_PERIOD           : positive := 99;   -- units of clock cycles (minus 1)
@@ -33,7 +33,9 @@ entity FreqBurst is
     );
     port (
         CLK                     : in std_logic;
-        RST                     : in std_logic;        
+        RST                     : in std_logic;   
+        -- Enable burst sequence to start     
+        EN                      : in std_logic;        
         -- RF freq (simple DAC)
         RF_FREQ                 : out std_logic_vector(RF_FREQ_WIDTH-1 downto 0);
         -- RF div
@@ -47,10 +49,10 @@ entity FreqBurst is
         RX                      : in std_logic;
         TX                      : out std_logic
     );
-end FreqBurst;
+end FreqBurstAuto;
 
 
-architecture Behavioral of FreqBurst is
+architecture Behavioral of FreqBurstAuto is
 
     -- handshakes
     signal rx_valid_out_sig         : std_logic;
@@ -80,7 +82,6 @@ architecture Behavioral of FreqBurst is
     -- telemetry
     signal serial_alarm_sig         : std_logic_vector(1 downto 0);
     signal rx_data_sig              : std_logic_vector(8*8-1 downto 0);
-    signal rx_data_reg_sig          : std_logic_vector(8*8-1 downto 0);
     signal tx_data_sig              : std_logic_vector(8*8-1 downto 0);
     
 begin
@@ -134,22 +135,22 @@ begin
             SAMPLE_PERIOD           => std_logic_vector(to_unsigned(SAMPLE_PERIOD,SAMPLE_PERIOD_WIDTH)),
             
             -- upstream handshake
-            VALID_IN                => rx_valid_out_sig,
-            READY_OUT               => ramp_ready_sig,
+            VALID_IN                => EN,
+            READY_OUT               => open,
     
             -- input data
             -- start frequency
-            RAMP_START              => rx_ramp_start_sig,
+            RAMP_START              => x"4",
             -- end frequency
-            RAMP_END                => rx_ramp_end_sig,
+            RAMP_END                => x"7",
             -- cycles-1 (total number of repeated cycles with same start/step/end)
-            CYCLES                  => rx_cycles_sig,
+            CYCLES                  => x"00",
             -- PRE segment duration (units of samples)
-            PRE_DURATION            => rx_pre_sig,
+            PRE_DURATION            => x"000A",
             -- STEP segment duration (each step; units of samples; total duration of segment is ramp_delta*step_duration)
-            STEP_DURATION           => rx_step_sig,
+            STEP_DURATION           => x"000A",
             -- POST segment duration (units of samples)
-            POST_DURATION           => rx_post_sig,
+            POST_DURATION           => x"000A",
             
             -- output data & control
             -- ADC sample pulse
@@ -216,8 +217,7 @@ begin
             RX_HEADER_BYTES         => 2,
             RX_DATA_BYTES           => 8,
             TX_HEADER_BYTES         => 2,
-            TX_DATA_BYTES           => 8,
-            BIT_PERIOD              => 868
+            TX_DATA_BYTES           => 8
         )
         port map (
             CLK                     => CLK,
@@ -225,7 +225,7 @@ begin
             
             SERIAL_RX               => RX,
             SERIAL_TX               => TX,
-            RX_ALARM                => serial_alarm_sig,
+            SERIAL_ALARM            => serial_alarm_sig,
     
             -- RX data
             VALID_OUT               => rx_valid_out_sig,
@@ -237,37 +237,19 @@ begin
             TX_HEADER		        => x"7278", -- 'r','x'
             TX_DATA  		        => tx_data_sig
         );
-    
-    rx_data_reg: entity work.Reg1D
-        generic map (
-            LENGTH              => 8*8
-        )
-        port map (
-            CLK                 => CLK,
-            RST                 => RST,
-    
-            PAR_EN              => ramp_valid_out_sig,
-            PAR_IN              => rx_data_sig,
-            PAR_OUT             => rx_data_reg_sig
-        );
-    
-    rx_ramp_start_sig   <= rx_data_reg_sig(8*8-1 downto 8*7+4);
-    rx_ramp_end_sig     <= rx_data_reg_sig(8*7+3 downto 8*7);
-    rx_cycles_sig       <= rx_data_reg_sig(8*7-1 downto 8*6);
-    rx_pre_sig          <= rx_data_reg_sig(8*6-1 downto 8*4);
-    rx_step_sig         <= rx_data_reg_sig(8*4-1 downto 8*2);
-    rx_post_sig         <= rx_data_reg_sig(8*2-1 downto 0);
-    
-    
-    ILA : entity work.ila_FreqBurst
+        
+    ILA : entity work.ila_FreqBurstAuto
     port map (
         clk             => CLK,
-        probe0(0)       => rx_valid_out_sig,
+        probe0(0)       => EN,
         probe1(0)       => ramp_valid_out_sig,
-        probe2(0)       => adc_sample_sig,
-        probe3          => rx_data_sig,
-        probe4          => rx_data_reg_sig,
-        probe5          => tx_data_sig
+        probe2          => i_adc_sig,
+        probe3          => q_adc_sig,
+        probe4          => rf_div_period_sig,
+        probe5          => cycle_count_sig,
+        probe6          => sample_count_sig,
+        probe7(0)       => adc_sample_sig,
+        probe8          => rx_data_sig
     );
 
 end Behavioral;

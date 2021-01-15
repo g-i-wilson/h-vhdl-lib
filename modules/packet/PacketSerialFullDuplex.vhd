@@ -15,7 +15,8 @@ entity PacketSerialFullDuplex is
         RX_HEADER_BYTES         : positive := 2;
         RX_DATA_BYTES           : positive := 8;
         TX_HEADER_BYTES         : positive := 2;
-        TX_DATA_BYTES           : positive := 8
+        TX_DATA_BYTES           : positive := 8;
+        BIT_PERIOD              : positive := 868 -- default is 115200bps at 100MHz clock
     );
     port (
         CLK                     : in std_logic;
@@ -23,7 +24,7 @@ entity PacketSerialFullDuplex is
         
         SERIAL_RX               : in std_logic;
         SERIAL_TX               : out std_logic;
-        SERIAL_ALARM            : out std_logic_vector(1 downto 0);
+        RX_ALARM                : out std_logic_vector(1 downto 0);
 
 		-- RX data
         VALID_OUT               : out std_logic;
@@ -46,9 +47,9 @@ architecture Behavioral of PacketSerialFullDuplex is
   signal serial_rx_valid_sig    : std_logic;
   signal serial_rx_data_sig     : std_logic_vector(7 downto 0);
   signal rx_header_sig          : std_logic_vector(RX_HEADER_BYTES*8-1 downto 0);
+  signal rx_alarm_sig           : std_logic_vector(1 downto 0);
 
 	-- TX signals
-  signal fifo_tx_ready_sig      : std_logic;
   signal fifo_tx_not_valid_sig  : std_logic;
   signal fifo_tx_valid_sig      : std_logic;
   signal packet_tx_ready_sig    : std_logic;
@@ -74,9 +75,9 @@ begin
             DETECTOR_PERIOD 		=> 16, -- sample detector MA filter
             DETECTOR_LOGIC_HIGH 	=> 12, -- 12..15 is high
             DETECTOR_LOGIC_LOW 		=> 3,  -- 0..3 is low
-            BIT_TIMER_WIDTH 		=> 8,
-            BIT_TIMER_PERIOD 		=> 100, -- clk_freq/sample_period/100
-            VALID_LAG 				=> 50   -- when to start looking for a VALID signal
+            BIT_TIMER_WIDTH 		=> 16, -- 868 == 0x0364
+            BIT_TIMER_PERIOD 		=> BIT_PERIOD, -- clk_freq/SAMPLE_PERIOD/BIT_PERIOD
+            VALID_LAG 				=> 434  -- when to start looking for a VALID signal
         )
         port map (
             CLK 					=> CLK,
@@ -85,8 +86,10 @@ begin
             RX 						=> SERIAL_RX,
             VALID 					=> serial_rx_valid_sig,
             DATA 					=> serial_rx_data_sig,
-            ALARM 					=> SERIAL_ALARM
+            ALARM 					=> rx_alarm_sig
         );
+        
+    RX_ALARM <= rx_alarm_sig;
     
     PacketRx_module: entity work.PacketRx
         generic map (
@@ -130,11 +133,18 @@ begin
             WREN                => VALID_IN,                -- 1-bit input write enable
             -- output path
             DO                  => fifo_tx_out_sig,         -- Output data, width defined by DATA_WIDTH parameter
-            RDEN                => fifo_tx_ready_sig,       -- 1-bit input read enable
+            RDEN                => packet_tx_ready_sig,       -- 1-bit input read enable
             EMPTY               => fifo_tx_not_valid_sig    -- 1-bit output empty
         );
         
-    fifo_tx_valid_sig <= not fifo_tx_not_valid_sig;
+    process (CLK) begin
+        if rising_edge(CLK) then
+            if packet_tx_ready_sig='1' then
+                fifo_tx_valid_sig <= not fifo_tx_not_valid_sig;
+            end if;
+        end if;
+    end process;
+    
     packet_tx_data_sig <= TX_HEADER & fifo_tx_out_sig;
 
     PacketTx_module: entity work.PacketTx
@@ -162,13 +172,24 @@ begin
             CLK                 => CLK,
             EN                  => '1',
             RST                 => RST,
-            BIT_TIMER_PERIOD    => x"0063", -- clk/(99+1)
+            BIT_TIMER_PERIOD    => std_logic_vector(to_unsigned(BIT_PERIOD-1, 16)), -- x"0363" or 867, 100MHz/(867+1) = 115200 Hz
             VALID               => packet_tx_valid_sig,
             DATA                => packet_tx_symbol_sig,
             -- outputs
             READY               => uart_tx_ready_sig,
             TX                  => SERIAL_TX
         );
+
+    ILA : entity work.ila_PacketSerialFullDuplex
+    port map (
+        clk             => CLK,
+        probe0(0)       => VALID_IN,
+        probe1          => TX_DATA,
+        probe2(0)       => fifo_tx_valid_sig,
+        probe3          => fifo_tx_out_sig,
+        probe4(0)       => packet_tx_ready_sig,
+        probe5          => rx_alarm_sig
+    );
 
 
 end Behavioral;

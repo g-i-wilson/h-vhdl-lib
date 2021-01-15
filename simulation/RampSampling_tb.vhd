@@ -147,7 +147,7 @@ RampSampling_module: entity work.RampSampling
         
         test_sample_period <= x"03";
         test_cycles <= x"04";
-        test_ramp_start <= x"04";
+        test_ramp_start <= x"01";
         test_ramp_end <= x"01";
         test_pre_duration <= x"02";
         test_step_duration <= x"04";

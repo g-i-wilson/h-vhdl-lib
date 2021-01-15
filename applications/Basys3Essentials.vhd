@@ -26,7 +26,8 @@ entity Basys3Essentials is
         RST_IN                  : in std_logic := '0';
         RST_OUT                 : out std_logic;
         SW_IN                  	: in std_logic_vector(SW_WIDTH-1 downto 0) := (others => '0');
-        SW_OUT                 	: out std_logic_vector(SW_WIDTH-1 downto 0)
+        SW_OUT                 	: out std_logic_vector(SW_WIDTH-1 downto 0);
+        SW_EVENT_OUT            : out std_logic_vector(SW_WIDTH-1 downto 0)
     );
 end Basys3Essentials;
 
@@ -89,7 +90,7 @@ begin
             SAMPLE                    => '1',
             SIG_IN                    => SW_IN,
             
-            EDGE_EVENT                => open,
+            EDGE_EVENT                => SW_EVENT_OUT,
             DATA                      => SW_OUT
         );
         

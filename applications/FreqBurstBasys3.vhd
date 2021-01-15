@@ -43,7 +43,9 @@ architecture Behavioral of FreqBurstBasys3 is
 
     signal clk_sig                  : std_logic;
     signal rst_sig                  : std_logic;
+    signal en_burst_sig             : std_logic;
     signal sw_sig                   : std_logic_vector(15 downto 0);
+    signal sw_event_sig             : std_logic_vector(15 downto 0);
 
     
 begin
@@ -64,12 +66,13 @@ begin
             RST_IN                  => btnL,
             RST_OUT                 => rst_sig,
             SW_IN                  	=> sw,
-            SW_OUT                 	=> sw_sig
-    );
+            SW_OUT                 	=> sw_sig,
+            SW_EVENT_OUT            => sw_event_sig
+        );
 
     led(1) <= rst_sig;
     
-    JA_7 <= sw_sig(15);
+    JA_6 <= sw_sig(15);
     
     led(15) <= sw_sig(15);
 
@@ -113,5 +116,49 @@ begin
             RX                      => RX,
             TX                      => TX
         );
+
+--    en_burst_sig <= sw_sig(14) and sw_event_sig(14);
+
+--    FreqBurst_module: entity work.FreqBurstAuto
+--        generic map (
+--            -- Sample rate
+--            SAMPLE_PERIOD           => 99,   -- units of clock cycles (minus 1)
+--            SAMPLE_PERIOD_WIDTH     => 8,
+--            -- Serial rate
+--            SERIAL_RATE             => 99,   -- units of clock cycles (minus 1)
+--            -- RF freq (DAC)
+--            RF_FREQ_WIDTH           => 4,    -- width of output vlaues to DAC controlling RF freq
+--            -- RF div
+--            RF_DIV_PERIOD_WIDTH     => 8,    -- width of div-freq period (units of clock cycles)
+--            RF_DIV_MA_LENGTH        => 4,    -- number of samples in MA filter
+--            RF_DIV_MA_SUM_WIDTH     => 12,   -- width of div-freq MA sum
+--            RF_DIV_MA_SUM_SHIFT     => 2,    -- divide the MA sum by shifting
+--            -- cycles
+--            CYCLE_COUNT_WIDTH       => 8,    -- width of cycles-1 total & width of cycle count
+--            -- samples
+--            SAMPLE_COUNT_WIDTH      => 16,   -- width of samples-1 totals & width of sample counts
+--            -- I & Q (ADCs)
+--            ADC_WIDTH               => 16    -- width of I & Q data input from ADCs
+--        )
+--        port map (
+--            CLK                     => clk_sig,
+--            RST                     => rst_sig,
+--            EN                      => en_burst_sig,
+--            -- RF freq (simple DAC)
+--            RF_FREQ(3)              => JA_0,
+--            RF_FREQ(2)              => JA_1,
+--            RF_FREQ(1)              => JA_2,
+--            RF_FREQ(0)              => JA_3,
+--            -- RF div
+--            RF_DIV                  => JA_7,        
+--            -- I & Q (simple delta-sigma ADCs)
+--            I_ADC_CMP               => XA1_P,
+--            I_ADC_INV               => XA1_N,
+--            Q_ADC_CMP               => XA2_P,
+--            Q_ADC_INV               => XA2_N,
+--            -- Serial IO
+--            RX                      => RX,
+--            TX                      => TX
+--        );
 
 end Behavioral;
