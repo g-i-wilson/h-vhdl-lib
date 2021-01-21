@@ -76,7 +76,7 @@ begin
             DETECTOR_LOGIC_LOW 		=> 3,  -- 0..3 is low
             BIT_TIMER_WIDTH 		=> 16, -- 868 == 0x0364
             BIT_TIMER_PERIOD 		=> BIT_PERIOD, -- clk_freq/SAMPLE_PERIOD/BIT_PERIOD
-            VALID_LAG 				=> 434  -- when to start looking for a VALID signal
+            VALID_LAG 				=> BIT_PERIOD/2  -- when to start looking for a VALID signal
         )
         port map (
             CLK 					=> CLK,

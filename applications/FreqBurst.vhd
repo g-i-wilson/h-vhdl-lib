@@ -217,7 +217,7 @@ begin
             RX_DATA_BYTES           => 8,
             TX_HEADER_BYTES         => 2,
             TX_DATA_BYTES           => 8,
-            BIT_PERIOD              => 868
+            BIT_PERIOD              => 100 -- 1Mbps serial
         )
         port map (
             CLK                     => CLK,
