@@ -42,7 +42,6 @@ end PacketSerialFullDuplex;
 architecture Behavioral of PacketSerialFullDuplex is
 
 	-- RX signals
-  signal packet_rx_valid_sig    : std_logic;
   signal packet_rx_data_sig     : std_logic_vector(RX_DATA_BYTES*8-1 downto 0);
   signal serial_rx_valid_sig    : std_logic;
   signal serial_rx_data_sig     : std_logic_vector(7 downto 0);
@@ -106,7 +105,7 @@ begin
 
             VALID_IN            => serial_rx_valid_sig,
             READY_OUT           => open,
-            VALID_OUT           => packet_rx_valid_sig,
+            VALID_OUT           => VALID_OUT,
            	READY_IN            => '1',
         
             DATA_OUT            => RX_DATA
@@ -180,16 +179,16 @@ begin
             TX                  => SERIAL_TX
         );
 
-    ILA : entity work.ila_PacketSerialFullDuplex
-    port map (
-        clk             => CLK,
-        probe0(0)       => VALID_IN,
-        probe1          => TX_DATA,
-        probe2(0)       => fifo_tx_valid_sig,
-        probe3          => fifo_tx_out_sig,
-        probe4(0)       => packet_tx_ready_sig,
-        probe5          => rx_alarm_sig
-    );
+--    ILA : entity work.ila_PacketSerialFullDuplex
+--    port map (
+--        clk             => CLK,
+--        probe0(0)       => VALID_IN,
+--        probe1          => TX_DATA,
+--        probe2(0)       => fifo_tx_valid_sig,
+--        probe3          => fifo_tx_out_sig,
+--        probe4(0)       => packet_tx_ready_sig,
+--        probe5          => rx_alarm_sig
+--    );
 
 
 end Behavioral;

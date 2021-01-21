@@ -106,5 +106,17 @@ begin
             PACKET_COMPLETE     => packet_complete_sig
         );
 
+    ILA : entity work.ila_PacketRx
+    port map (
+        clk             => CLK,
+        probe0          => symbol_newest_sig,
+        probe1          => symbol_oldest_sig,
+        probe2(0)       => shift_en_sig,
+        probe3(0)       => ready_out_sig,
+        probe4(0)       => packet_complete_sig,
+        probe5          => checksum_sig,
+        probe6          => checksum_next_sig
+    );
+
 
 end Behavioral;

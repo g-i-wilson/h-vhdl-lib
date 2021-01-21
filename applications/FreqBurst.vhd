@@ -246,7 +246,7 @@ begin
             CLK                 => CLK,
             RST                 => RST,
     
-            PAR_EN              => ramp_valid_out_sig,
+            PAR_EN              => rx_valid_out_sig,
             PAR_IN              => rx_data_sig,
             PAR_OUT             => rx_data_reg_sig
         );
