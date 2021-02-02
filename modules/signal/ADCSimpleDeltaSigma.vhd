@@ -61,7 +61,7 @@ begin
 
     filter_in_sig <= (not adc_out_sig) & adc_out_sig; -- +1 for high, -1 for low
 
-    LP_filter: entity work.FIRFilterLP15tap
+    LP_filter: entity work.FIRFilterLP63tap
         generic map (
             SIG_IN_WIDTH        => 2, -- signal input path width
             SIG_OUT_WIDTH       => SIG_OUT_WIDTH -- signal output path width
