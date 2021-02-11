@@ -12,20 +12,27 @@ use IEEE.NUMERIC_STD.ALL;
 
 entity SPISerial is
     generic (
-        ADDR_BYTES                  : positive := 2;
-        DATA_BYTES		              : positive := 1;
-        HEADER_BYTES		            : positive := 2;
+        -- packet header
+        HEADER_BYTES		        : positive := 2;
+        -- packet data (contains SPI_ADDR, CONTROL, SPI_DATA)
+        SPI_ADDR_BYTES              : positive := 2;
+        SPI_CTL_BYTES               : positive := 1; -- contains R/W indication
+        SPI_DATA_BYTES		        : positive := 1;
+
         SCK_HALF_PERIOD_WIDTH       : positive := 8;
         BIT_COUNTER_WIDTH           : positive := 8;
-        MISO_DETECTOR_SAMPLES       : positive := 16
+        MISO_DETECTOR_SAMPLES       : positive := 16;
+        BIT_PERIOD                  : positive := 100 -- 1MHz buad rate @ 100MHz clock
     );
     port (
         CLK                         : in STD_LOGIC;
         RST                         : in STD_LOGIC;
 
-        TO_SPI_HEADER               : in STD_LOGIC_VECTOR (HEADER_BYTES*8-1 downto 0);
-        FROM_SPI_HEADER             : in STD_LOGIC_VECTOR (HEADER_BYTES*8-1 downto 0);
-        RW_BYTE                     : in STD_LOGIC_VECTOR (7 downto 0);
+        RX                          : in STD_LOGIC;
+        TX                          : out STD_LOGIC;
+
+        RX_HEADER                   : in STD_LOGIC_VECTOR (HEADER_BYTES*8-1 downto 0);
+        TX_HEADER                   : in STD_LOGIC_VECTOR (HEADER_BYTES*8-1 downto 0);
 
         SCK_HALF_PERIOD	            : in STD_LOGIC_VECTOR (SCK_HALF_PERIOD_WIDTH-1 downto 0);
 
@@ -39,32 +46,20 @@ end SPISerial;
 
 architecture Behavioral of SPISerial is
 
-    signal rx_valid_sig        : std_logic;
+    signal rx_valid_sig         : std_logic;
     signal spi_ready_sig        : std_logic;
     signal spi_valid_sig        : std_logic;
-    signal ready_to_verify_sig  : std_logic;
 
-    signal config_select_sig    : std_logic;
-    signal counter_en_sig       : std_logic;
-    signal counter_rst_sig      : std_logic;
-    signal counter_rst_fsm_sig  : std_logic;
-    signal retry_en_sig         : std_logic;
-    signal retry_rst_sig        : std_logic;
-    signal retry_rst_fsm_sig    : std_logic;
-    signal verified_data_sig    : std_logic;
-    signal config_done_sig      : std_logic;
-    signal verify_done_sig      : std_logic;
-    signal retry_sig            : std_logic;
+    signal serial_alarm_sig     : std_logic_vector(1 downto 0);
+
     signal write_sig            : std_logic;
 
-    signal count_sig            : std_logic_vector(COUNTER_WIDTH-1 downto 0);
-    signal en_config_sig        : std_logic;
-    signal en_verify_sig        : std_logic;
-    signal config_out_sig       : std_logic_vector(ADDR_WIDTH+DATA_WIDTH-1 downto 0);
-    signal verify_out_sig       : std_logic_vector(ADDR_WIDTH+DATA_WIDTH-1 downto 0);
-    signal reg_out_sig          : std_logic_vector(ADDR_WIDTH+DATA_WIDTH-1 downto 0);
-
-    signal spi_out_sig          : std_logic_vector(DATA_WIDTH-1 downto 0);
+    signal spi_in_sig           : std_logic_vector((SPI_DATA_BYTES)*8-1 downto 0);
+    signal spi_out_sig          : std_logic_vector((SPI_DATA_BYTES)*8-1 downto 0);
+    
+    signal rx_data_sig          : std_logic_vector((SPI_ADDR_BYTES+SPI_CTL_BYTES+SPI_DATA_BYTES)*8-1 downto 0);
+    signal rx_data_reg_sig      : std_logic_vector((SPI_ADDR_BYTES+SPI_CTL_BYTES+SPI_DATA_BYTES)*8-1 downto 0);
+    signal tx_data_sig          : std_logic_vector((SPI_ADDR_BYTES+SPI_CTL_BYTES+SPI_DATA_BYTES)*8-1 downto 0);
 
 begin
 
@@ -72,9 +67,9 @@ begin
         -- Serial baud rate is clk_freq/100
         generic map (
             RX_HEADER_BYTES         => HEADER_BYTES,
-            RX_DATA_BYTES           => ADDR_BYTES + DATA_BYTES,
+            RX_DATA_BYTES           => SPI_ADDR_BYTES + SPI_CTL_BYTES + SPI_DATA_BYTES,
             TX_HEADER_BYTES         => HEADER_BYTES,
-            TX_DATA_BYTES           => ADDR_BYTES + DATA_BYTES,
+            TX_DATA_BYTES           => SPI_ADDR_BYTES                 + SPI_DATA_BYTES,
             BIT_PERIOD              => BIT_PERIOD
         )
         port map (
@@ -87,18 +82,18 @@ begin
 
             -- RX data
             VALID_OUT               => rx_valid_sig,
-            RX_HEADER		        => TO_SPI_HEADER,
+            RX_HEADER		        => RX_HEADER,
             RX_DATA  		        => rx_data_sig,
 
             -- TX data
             VALID_IN                => spi_valid_sig,
-            TX_HEADER		        => FROM_SPI_HEADER,
-            TX_DATA  		        => spi_out_sig
+            TX_HEADER		        => TX_HEADER,
+            TX_DATA  		        => tx_data_sig
         );
 
     rx_data_reg: entity work.Reg1D
         generic map (
-            LENGTH              =>  (ADDR_BYTES + DATA_BYTES) * 8
+            LENGTH              =>  (SPI_ADDR_BYTES + SPI_CTL_BYTES + SPI_DATA_BYTES) * 8
         )
         port map (
             CLK                 => CLK,
@@ -109,14 +104,22 @@ begin
             PAR_OUT             => rx_data_reg_sig
         );
 
-    reg_out_sig         <= config_out_sig when (config_select_sig = '1') else verify_out_sig;
-    verified_data_sig   <= '1' when (verify_out_sig(DATA_WIDTH-1 downto 0) = spi_out_sig) else '0';
-
+    -- map addr from input packet to output packet
+    spi_addr_sig    <= rx_data_reg_sig((SPI_ADDR_BYTES + SPI_CTL_BYTES + SPI_DATA_BYTES)*8-1 downto (SPI_CTL_BYTES + SPI_DATA_BYTES)*8);
+    spi_ctl_sig     <= rx_data_reg_sig((                 SPI_CTL_BYTES + SPI_DATA_BYTES)*8   downto (                SPI_DATA_BYTES)*8);
+    spi_in_sig      <= rx_data_reg_sig((                                 SPI_DATA_BYTES)*8-1 downto                                  0);
+    
+    -- SPI addr_sig & SPI output
+    tx_data_sig     <= spi_addr_sig & spi_out_sig;
+    
+    -- write indication when the control byte == 'w'
+    write_sig <= '1' when spi_ctl_sig = x"77" else '0';
+    
     SPIMaster_module: entity work.SPIMaster
         generic map (
             SCK_HALF_PERIOD_WIDTH   =>  SCK_HALF_PERIOD_WIDTH,
-            ADDR_WIDTH              =>  ADDR_WIDTH,
-            DATA_WIDTH              =>  DATA_WIDTH,
+            ADDR_WIDTH              =>  SPI_ADDR_BYTES*8,
+            DATA_WIDTH              =>  SPI_DATA_BYTES*8,
             COUNTER_WIDTH           =>  BIT_COUNTER_WIDTH,
             MISO_DETECTOR_SAMPLES   => MISO_DETECTOR_SAMPLES
         )
@@ -132,12 +135,12 @@ begin
             VALID_IN                => rx_valid_sig,
 
             -- downstream
-            READY_IN                => ready_to_verify_sig,
+            READY_IN                => '1',
             VALID_OUT               => spi_valid_sig,
 
             -- ADDR & DATA
-            ADDR                    => reg_out_sig(ADDR_BYTES*8+DATA_BYTES*8-1 downto DATA_BYTES*8),
-            DATA_IN                 => reg_out_sig(DATA_BYTES*8-1 downto 0),
+            ADDR                    => spi_addr_sig,
+            DATA_IN                 => spi_in_sig,
             DATA_OUT                => spi_out_sig,
 
             -- SPI
@@ -149,8 +152,8 @@ begin
             TRISTATE_EN             => TRISTATE_EN
         );
 
-    VERIFY_ADDR     <= verify_out_sig(ADDR_WIDTH+DATA_WIDTH-1 downto DATA_WIDTH);
-    VERIFY_DATA     <= reg_out_sig(DATA_WIDTH-1 downto 0);
+    VERIFY_ADDR     <= verify_out_sig(SPI_ADDR_BYTES*8+SPI_DATA_BYTES*8-1 downto SPI_DATA_BYTES*8);
+    VERIFY_DATA     <= reg_out_sig(SPI_DATA_BYTES*8-1 downto 0);
     ACTUAL_DATA     <= spi_out_sig;
 
 end Behavioral;
