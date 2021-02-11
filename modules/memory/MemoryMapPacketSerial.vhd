@@ -10,56 +10,54 @@ use IEEE.NUMERIC_STD.ALL;
 --library UNISIM;
 --use UNISIM.VComponents.all;
 
-entity SPISerial is
+entity MemoryMapPacketSerial is
     generic (
         -- packet header
         HEADER_BYTES		        : positive := 2;
         -- packet data (contains SPI_ADDR, CONTROL, SPI_DATA)
-        SPI_CTL_BYTES               : positive := 1; -- contains R/W indication
-        SPI_ADDR_BYTES              : positive := 2;
-        SPI_DATA_BYTES		        : positive := 1;
-
-        SCK_HALF_PERIOD_WIDTH       : positive := 8;
-        BIT_COUNTER_WIDTH           : positive := 8;
-        MISO_DETECTOR_SAMPLES       : positive := 16;
-        BIT_PERIOD                  : positive := 100 -- 1MHz buad rate @ 100MHz clock
+        MEM_CTL_BYTES               : positive := 1; -- MSB of first byte: 1 == "read"; the remaining bits/bytes can be used for a packet ID number
+        MEM_ADDR_BYTES              : positive := 2;
+        MEM_DATA_BYTES		        : positive := 1
     );
     port (
         CLK                         : in STD_LOGIC;
         RST                         : in STD_LOGIC;
 
+        -- serial I/O pins
         RX                          : in STD_LOGIC;
         TX                          : out STD_LOGIC;
-
-        RX_HEADER                   : in STD_LOGIC_VECTOR (HEADER_BYTES*8-1 downto 0);
-        TX_HEADER                   : in STD_LOGIC_VECTOR (HEADER_BYTES*8-1 downto 0);
-
-        SCK_HALF_PERIOD	            : in STD_LOGIC_VECTOR (SCK_HALF_PERIOD_WIDTH-1 downto 0);
-
-        CS                          : out STD_LOGIC;
-        SCK                         : out STD_LOGIC;
-        MISO                        : in STD_LOGIC;
-        MOSI                        : out STD_LOGIC;
-        TRISTATE_EN                 : out STD_LOGIC
+        
+        -- packet ID headers
+        READ_HEADER                 : in STD_LOGIC_VECTOR (HEADER_BYTES*8-1 downto 0);
+        WRITE_HEADER                : in STD_LOGIC_VECTOR (HEADER_BYTES*8-1 downto 0);
+        MEM_HEADER                  : in STD_LOGIC_VECTOR (HEADER_BYTES*8-1 downto 0);
+        
+        -- receiving from memory
+        VALID_IN                    : in STD_LOGIC;
+        READY_OUT                   : out STD_LOGIC;
+        
+        -- sending to memory
+        VALID_OUT                   : out STD_LOGIC;
+        READY_IN                    : in STD_LOGIC
     );
-end SPISerial;
+end MemoryMapPacketSerial;
 
-architecture Behavioral of SPISerial is
+architecture Behavioral of MemoryMapPacketSerial is
 
     signal rx_valid_sig         : std_logic;
-    signal spi_ready_sig        : std_logic;
-    signal spi_valid_sig        : std_logic;
+    signal MEM_ready_sig        : std_logic;
+    signal MEM_valid_sig        : std_logic;
 
     signal serial_alarm_sig     : std_logic_vector(1 downto 0);
 
     signal write_sig            : std_logic;
 
-    signal spi_in_sig           : std_logic_vector((SPI_DATA_BYTES)*8-1 downto 0);
-    signal spi_out_sig          : std_logic_vector((SPI_DATA_BYTES)*8-1 downto 0);
+    signal MEM_in_sig           : std_logic_vector((MEM_DATA_BYTES)*8-1 downto 0);
+    signal MEM_out_sig          : std_logic_vector((MEM_DATA_BYTES)*8-1 downto 0);
     
-    signal rx_data_sig          : std_logic_vector((SPI_CTL_BYTES+SPI_ADDR_BYTES+SPI_DATA_BYTES)*8-1 downto 0);
-    signal rx_data_reg_sig      : std_logic_vector((SPI_CTL_BYTES+SPI_ADDR_BYTES+SPI_DATA_BYTES)*8-1 downto 0);
-    signal tx_data_sig          : std_logic_vector((SPI_CTL_BYTES+SPI_ADDR_BYTES+SPI_DATA_BYTES)*8-1 downto 0);
+    signal rx_data_sig          : std_logic_vector((MEM_CTL_BYTES+MEM_ADDR_BYTES+MEM_DATA_BYTES)*8-1 downto 0);
+    signal rx_data_reg_sig      : std_logic_vector((MEM_CTL_BYTES+MEM_ADDR_BYTES+MEM_DATA_BYTES)*8-1 downto 0);
+    signal tx_data_sig          : std_logic_vector((MEM_CTL_BYTES+MEM_ADDR_BYTES+MEM_DATA_BYTES)*8-1 downto 0);
 
 begin
 
@@ -67,9 +65,9 @@ begin
         -- Serial baud rate is clk_freq/100
         generic map (
             RX_HEADER_BYTES         => HEADER_BYTES,
-            RX_DATA_BYTES           => SPI_ADDR_BYTES + SPI_CTL_BYTES + SPI_DATA_BYTES,
+            RX_DATA_BYTES           => MEM_ADDR_BYTES + MEM_CTL_BYTES + MEM_DATA_BYTES,
             TX_HEADER_BYTES         => HEADER_BYTES,
-            TX_DATA_BYTES           => SPI_ADDR_BYTES                 + SPI_DATA_BYTES,
+            TX_DATA_BYTES           => MEM_ADDR_BYTES                 + MEM_DATA_BYTES,
             BIT_PERIOD              => BIT_PERIOD
         )
         port map (
@@ -86,14 +84,14 @@ begin
             RX_DATA  		        => rx_data_sig,
 
             -- TX data
-            VALID_IN                => spi_valid_sig,
+            VALID_IN                => MEM_valid_sig,
             TX_HEADER		        => TX_HEADER,
             TX_DATA  		        => tx_data_sig
         );
 
     rx_data_reg: entity work.Reg1D
         generic map (
-            LENGTH              =>  (SPI_ADDR_BYTES + SPI_CTL_BYTES + SPI_DATA_BYTES) * 8
+            LENGTH              =>  (MEM_ADDR_BYTES + MEM_CTL_BYTES + MEM_DATA_BYTES) * 8
         )
         port map (
             CLK                 => CLK,
@@ -105,21 +103,21 @@ begin
         );
 
     -- map addr from input packet to output packet
-    spi_ctl_sig     <= rx_data_reg_sig((SPI_CTL_BYTES + SPI_ADDR_BYTES + SPI_DATA_BYTES)*8-1 downto (SPI_ADDR_BYTES + SPI_DATA_BYTES)*8);
-    spi_addr_sig    <= rx_data_reg_sig((                SPI_ADDR_BYTES + SPI_DATA_BYTES)*8   downto (                 SPI_DATA_BYTES)*8);
-    spi_in_sig      <= rx_data_reg_sig((                                 SPI_DATA_BYTES)*8-1 downto                                   0);
+    MEM_ctl_sig     <= rx_data_reg_sig((MEM_CTL_BYTES + MEM_ADDR_BYTES + MEM_DATA_BYTES)*8-1 downto (MEM_ADDR_BYTES + MEM_DATA_BYTES)*8);
+    MEM_addr_sig    <= rx_data_reg_sig((                MEM_ADDR_BYTES + MEM_DATA_BYTES)*8   downto (                 MEM_DATA_BYTES)*8);
+    MEM_in_sig      <= rx_data_reg_sig((                                 MEM_DATA_BYTES)*8-1 downto                                   0);
     
     -- write indication when the control byte == 'w'
-    write_sig <= '1' when spi_ctl_sig = x"77" else '0';
+    write_sig <= '1' when MEM_ctl_sig = x"77" else '0';
     
     -- SPI addr_sig & SPI output
-    tx_data_sig     <= spi_addr_sig & spi_out_sig;
+    tx_data_sig     <= MEM_addr_sig & MEM_out_sig;
     
     SPIMaster_module: entity work.SPIMaster
         generic map (
             SCK_HALF_PERIOD_WIDTH   =>  SCK_HALF_PERIOD_WIDTH,
-            ADDR_WIDTH              =>  SPI_ADDR_BYTES*8,
-            DATA_WIDTH              =>  SPI_DATA_BYTES*8,
+            ADDR_WIDTH              =>  MEM_ADDR_BYTES*8,
+            DATA_WIDTH              =>  MEM_DATA_BYTES*8,
             COUNTER_WIDTH           =>  BIT_COUNTER_WIDTH,
             MISO_DETECTOR_SAMPLES   => MISO_DETECTOR_SAMPLES
         )
@@ -131,17 +129,17 @@ begin
             WRITE                   => write_sig,
 
             -- upstream
-            READY_OUT               => spi_ready_sig,
+            READY_OUT               => MEM_ready_sig,
             VALID_IN                => rx_valid_sig,
 
             -- downstream
             READY_IN                => '1',
-            VALID_OUT               => spi_valid_sig,
+            VALID_OUT               => MEM_valid_sig,
 
             -- ADDR & DATA
-            ADDR                    => spi_addr_sig,
-            DATA_IN                 => spi_in_sig,
-            DATA_OUT                => spi_out_sig,
+            ADDR                    => MEM_addr_sig,
+            DATA_IN                 => MEM_in_sig,
+            DATA_OUT                => MEM_out_sig,
 
             -- SPI
             SCK_HALF_PERIOD         => SCK_HALF_PERIOD,

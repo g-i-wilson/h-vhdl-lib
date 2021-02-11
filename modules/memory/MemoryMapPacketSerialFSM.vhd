@@ -10,7 +10,7 @@ use IEEE.NUMERIC_STD.ALL;
 --library UNISIM;
 --use UNISIM.VComponents.all;
 
-entity SPIConfigureFSM is
+entity MemoryMapPacketSerialFSM is
     port ( 
         CLK             : in STD_LOGIC;
         RST             : in STD_LOGIC;
@@ -39,9 +39,9 @@ entity SPIConfigureFSM is
         -- debug
         STATE           : out STD_LOGIC_VECTOR(3 downto 0)
     );
-end SPIConfigureFSM;
+end MemoryMapPacketSerialFSM;
 
-architecture Behavioral of SPIConfigureFSM is
+architecture Behavioral of MemoryMapPacketSerialFSM is
 
 constant CONFIG_VALID_STATE         : std_logic_vector(3 downto 0) := x"0";
 constant EN_CONFIG_STATE            : std_logic_vector(3 downto 0) := x"1";
