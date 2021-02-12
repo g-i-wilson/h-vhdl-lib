@@ -15,7 +15,7 @@ entity MemoryMapPacketSerial is
         -- packet header
         HEADER_BYTES		        : positive := 2;
         -- packet data (contains SPI_ADDR, CONTROL, SPI_DATA)
-        MEM_CTL_BYTES               : positive := 1; -- MSB of first byte: 1 == "read"; the remaining bits/bytes can be used for a packet ID number
+        TRANSACTION_ID_BYTES        : positive := 1;
         MEM_ADDR_BYTES              : positive := 2;
         MEM_DATA_BYTES		        : positive := 1
     );
@@ -28,10 +28,10 @@ entity MemoryMapPacketSerial is
         TX                          : out STD_LOGIC;
         
         -- packet ID headers
-        READ_HEADER                 : in STD_LOGIC_VECTOR (HEADER_BYTES*8-1 downto 0);
-        WRITE_HEADER                : in STD_LOGIC_VECTOR (HEADER_BYTES*8-1 downto 0);
-        MEM_HEADER                  : in STD_LOGIC_VECTOR (HEADER_BYTES*8-1 downto 0);
-        
+        READ_HEADER                 : in STD_LOGIC_VECTOR (HEADER_BYTES*8-1 downto 0); -- packet containing ADDRESS bytes
+        WRITE_HEADER                : in STD_LOGIC_VECTOR (HEADER_BYTES*8-1 downto 0); -- packet containing ADDRESS & DATA bytes
+        RESPONSE_HEADER             : in STD_LOGIC_VECTOR (HEADER_BYTES*8-1 downto 0); -- packet containing DATA bytes
+
         -- receiving from memory
         VALID_IN                    : in STD_LOGIC;
         READY_OUT                   : out STD_LOGIC;
