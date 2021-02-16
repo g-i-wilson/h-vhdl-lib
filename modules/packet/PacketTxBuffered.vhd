@@ -35,35 +35,34 @@ end PacketTxBuffered;
 
 architecture Behavioral of PacketTxBuffered is
 
-  signal fifo_tx_data_sig               : std_logic_vector(SYMBOL_WIDTH*DATA_SYMBOLS-1 downto 0);
-  signal fifo_tx_valid_sig              : std_logic;
-  signal packet_tx_ready_sig            : std_logic;
+  signal data_frame_sig             : std_logic_vector(SYMBOL_WIDTH*DATA_SYMBOLS-1 downto 0);
+  signal fifo_valid_sig             : std_logic;
+  signal packet_ready_sig           : std_logic;
+  signal packet_sig                 : std_logic_vector(SYMBOL_WIDTH*(HEADER_SYMBOLS+DATA_SYMBOLS)-1 downto 0);
 
-  signal packet_tx_sig                  : std_logic_vector(SYMBOL_WIDTH*(HEADER_SYMBOLS+DATA_SYMBOLS)-1 downto 0);
-
-begin    
+begin
 
     FIFO_module: entity work.SimpleFIFO
           generic map (
-              DATA_WIDTH              => SYMBOL_WIDTH*DATA_SYMBOLS
+              DATA_WIDTH                => SYMBOL_WIDTH*DATA_SYMBOLS
           )
           port map (
-              CLK                     => CLK,
-              RST                     => RST,
+              CLK                       => CLK,
+              RST                       => RST,
               
-              -- upstream
-              DATA_IN					        => DATA_IN,
-              VALID_IN                => VALID_IN,
-              READY_OUT               => READY_OUT,
+              -- upstream data frame
+              DATA_IN                   => DATA_IN,
+              VALID_IN                  => VALID_IN,
+              READY_OUT                 => READY_OUT,
               
-              -- downstream
-              DATA_OUT				  => fifo_tx_data_sig,
-              VALID_OUT               => fifo_tx_valid_sig,
-              READY_IN                => packet_tx_ready_sig
+              -- downstream data frame
+              DATA_OUT                  => data_frame_sig,
+              VALID_OUT                 => fifo_valid_sig,
+              READY_IN                  => packet_ready_sig
               
           );
 
-    packet_tx_sig <= HEADER & fifo_tx_data_sig;
+    packet_sig <= HEADER & data_frame_sig;
 
     PacketTx_module: entity work.PacketTx
         generic map (
@@ -74,15 +73,15 @@ begin
             CLK                 => CLK,
             RST                 => RST,
             
-            PACKET_IN           => packet_tx_sig,
-
-            VALID_IN            => fifo_tx_valid_sig,            
-            READY_OUT           => packet_tx_ready_sig,
+            -- upstream packet (header & data-frame)
+            PACKET_IN           => packet_sig,
+            VALID_IN            => fifo_valid_sig,            
+            READY_OUT           => packet_ready_sig,
             
+            -- downstream symbol
+            SYMBOL_OUT          => SYMBOL_OUT,
             VALID_OUT           => VALID_OUT,
-            READY_IN            => READY_IN,
-            
-            SYMBOL_OUT          => SYMBOL_OUT
+            READY_IN            => READY_IN          
         );
     
 
