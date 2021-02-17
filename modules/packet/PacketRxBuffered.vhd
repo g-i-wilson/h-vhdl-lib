@@ -35,7 +35,7 @@ end PacketRxBuffered;
 
 architecture Behavioral of PacketRxBuffered is
 
-  signal data_frame_sig                 : std_logic_vector(SYMBOL_WIDTH-1 downto 0);
+  signal data_frame_sig                 : std_logic_vector(SYMBOL_WIDTH*DATA_SYMBOLS-1 downto 0);
   signal packet_valid_sig               : std_logic;
   signal fifo_ready_sig                 : std_logic;
 
@@ -65,7 +65,7 @@ begin
 
     FIFO_module: entity work.SimpleFIFO
           generic map (
-              DATA_WIDTH                => SYMBOL_WIDTH
+              DATA_WIDTH                => SYMBOL_WIDTH*DATA_SYMBOLS
           )
           port map (
               CLK                       => CLK,

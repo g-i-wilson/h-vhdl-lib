@@ -23,22 +23,24 @@ entity MemoryMapPacketSerial is
         CLK                         : in STD_LOGIC;
         RST                         : in STD_LOGIC;
 
-        -- serial I/O pins
+        -- serial
         RX                          : in STD_LOGIC;
         TX                          : out STD_LOGIC;
         
-        -- packet ID headers
-        READ_HEADER                 : in STD_LOGIC_VECTOR (HEADER_BYTES*8-1 downto 0); -- packet containing ADDRESS bytes
-        WRITE_HEADER                : in STD_LOGIC_VECTOR (HEADER_BYTES*8-1 downto 0); -- packet containing ADDRESS & DATA bytes
-        RESPONSE_HEADER             : in STD_LOGIC_VECTOR (HEADER_BYTES*8-1 downto 0); -- packet containing DATA bytes
+        -- packet
+        READ_HEADER                 : in STD_LOGIC_VECTOR (HEADER_BYTES*8-1 downto 0); -- packet containing TRANSACTION_ID & ADDRESS bytes
+        WRITE_HEADER                : in STD_LOGIC_VECTOR (HEADER_BYTES*8-1 downto 0); -- packet containing TRANSACTION_ID & ADDRESS & DATA bytes
+        RESPONSE_HEADER             : in STD_LOGIC_VECTOR (HEADER_BYTES*8-1 downto 0); -- packet containing TRANSACTION_ID & ADDRESS & DATA bytes
 
-        -- receiving from memory
-        VALID_IN                    : in STD_LOGIC;
-        READY_OUT                   : out STD_LOGIC;
-        
-        -- sending to memory
-        VALID_OUT                   : out STD_LOGIC;
-        READY_IN                    : in STD_LOGIC
+        -- to memory
+        MEM_WRITE                   : out STD_LOGIC; -- 1:WRITE, 0:READ
+        MEM_ADDR_VALID              : out STD_LOGIC;
+        MEM_ADDR                    : out STD_LOGIC_VECTOR (MEM_ADDR_BYTES*8-1 downto 0);
+        MEM_DATA_OUT                : out STD_LOGIC_VECTOR (MEM_DATA_BYTES*8-1 downto 0); -- only applicable for WRITE
+
+        -- from memory
+        MEM_DATA_VALID              : in STD_LOGIC;
+        MEM_DATA_IN                 : in STD_LOGIC_VECTOR (MEM_DATA_BYTES*8-1 downto 0)
     );
 end MemoryMapPacketSerial;
 
@@ -61,93 +63,74 @@ architecture Behavioral of MemoryMapPacketSerial is
 
 begin
 
-    telemetry: entity work.PacketSerialFullDuplex
-        -- Serial baud rate is clk_freq/100
+    SerialRx_module: entity work.SerialRx
         generic map (
-            RX_HEADER_BYTES         => HEADER_BYTES,
-            RX_DATA_BYTES           => MEM_ADDR_BYTES + MEM_CTL_BYTES + MEM_DATA_BYTES,
-            TX_HEADER_BYTES         => HEADER_BYTES,
-            TX_DATA_BYTES           => MEM_ADDR_BYTES                 + MEM_DATA_BYTES,
-            BIT_PERIOD              => BIT_PERIOD
+            SAMPLE_PERIOD_WIDTH 	=> 1,
+            SAMPLE_PERIOD 			=> 1,
+            DETECTOR_PERIOD_WIDTH 	=> 4,
+            DETECTOR_PERIOD 		=> 16, -- sample detector MA filter
+            DETECTOR_LOGIC_HIGH 	=> 12, -- 12..15 is high
+            DETECTOR_LOGIC_LOW 		=> 3,  -- 0..3 is low
+            BIT_TIMER_WIDTH 		=> 16, -- 868 == 0x0364
+            BIT_TIMER_PERIOD 		=> BIT_PERIOD, -- clk_freq/SAMPLE_PERIOD/BIT_PERIOD
+            VALID_LAG 				=> BIT_PERIOD/2  -- when to start looking for a VALID signal
         )
         port map (
-            CLK                     => CLK,
-            RST                     => RST,
-
-            SERIAL_RX               => RX,
-            SERIAL_TX               => TX,
-            RX_ALARM                => serial_alarm_sig,
-
-            -- RX data
-            VALID_OUT               => rx_valid_sig,
-            RX_HEADER		        => RX_HEADER,
-            RX_DATA  		        => rx_data_sig,
-
-            -- TX data
-            VALID_IN                => MEM_valid_sig,
-            TX_HEADER		        => TX_HEADER,
-            TX_DATA  		        => tx_data_sig
+            CLK 					=> CLK,
+            EN 						=> '1',
+            RST 					=> RST,
+            RX 						=> SERIAL_RX,
+            VALID 					=> serial_rx_valid_sig,
+            DATA 					=> serial_rx_data_sig,
+            ALARM 					=> rx_alarm_sig
         );
-
-    rx_data_reg: entity work.Reg1D
-        generic map (
-            LENGTH              =>  (MEM_ADDR_BYTES + MEM_CTL_BYTES + MEM_DATA_BYTES) * 8
-        )
-        port map (
-            CLK                 => CLK,
-            RST                 => RST,
-
-            PAR_EN              => rx_valid_sig,
-            PAR_IN              => rx_data_sig,
-            PAR_OUT             => rx_data_reg_sig
+        
+    RX_ALARM <= rx_alarm_sig;
+    
+    entity PacketRxBuffered is
+        generic (
+            SYMBOL_WIDTH            : positive := 8; -- typically a BYTE
+            HEADER_SYMBOLS          : positive := 2;
+            DATA_SYMBOLS            : positive := 4
         );
-
-    -- map addr from input packet to output packet
-    MEM_ctl_sig     <= rx_data_reg_sig((MEM_CTL_BYTES + MEM_ADDR_BYTES + MEM_DATA_BYTES)*8-1 downto (MEM_ADDR_BYTES + MEM_DATA_BYTES)*8);
-    MEM_addr_sig    <= rx_data_reg_sig((                MEM_ADDR_BYTES + MEM_DATA_BYTES)*8   downto (                 MEM_DATA_BYTES)*8);
-    MEM_in_sig      <= rx_data_reg_sig((                                 MEM_DATA_BYTES)*8-1 downto                                   0);
-    
-    -- write indication when the control byte == 'w'
-    write_sig <= '1' when MEM_ctl_sig = x"77" else '0';
-    
-    -- SPI addr_sig & SPI output
-    tx_data_sig     <= MEM_addr_sig & MEM_out_sig;
-    
-    SPIMaster_module: entity work.SPIMaster
-        generic map (
-            SCK_HALF_PERIOD_WIDTH   =>  SCK_HALF_PERIOD_WIDTH,
-            ADDR_WIDTH              =>  MEM_ADDR_BYTES*8,
-            DATA_WIDTH              =>  MEM_DATA_BYTES*8,
-            COUNTER_WIDTH           =>  BIT_COUNTER_WIDTH,
-            MISO_DETECTOR_SAMPLES   => MISO_DETECTOR_SAMPLES
-        )
-        port map (
-            CLK                     => CLK,
-            RST                     => RST,
-
-            -- R/W
-            WRITE                   => write_sig,
-
+        port (
+            CLK                     : in std_logic;
+            RST                     : in std_logic;
+            HEADER                  : in std_logic_vector(SYMBOL_WIDTH*HEADER_SYMBOLS-1 downto 0);
+            
             -- upstream
-            READY_OUT               => MEM_ready_sig,
-            VALID_IN                => rx_valid_sig,
-
+            SYMBOL_IN               : in std_logic_vector(SYMBOL_WIDTH-1 downto 0);
+            VALID_IN                : in std_logic;
+            READY_OUT               : out std_logic;
+            
             -- downstream
-            READY_IN                => '1',
-            VALID_OUT               => MEM_valid_sig,
-
-            -- ADDR & DATA
-            ADDR                    => MEM_addr_sig,
-            DATA_IN                 => MEM_in_sig,
-            DATA_OUT                => MEM_out_sig,
-
-            -- SPI
-            SCK_HALF_PERIOD         => SCK_HALF_PERIOD,
-            MISO                    => MISO,
-            MOSI                    => MOSI,
-            SCK                     => SCK,
-            CS                      => CS,
-            TRISTATE_EN             => TRISTATE_EN
+            DATA_OUT              	: out std_logic_vector(SYMBOL_WIDTH*DATA_SYMBOLS-1 downto 0);
+            VALID_OUT               : out std_logic;
+            READY_IN                : in std_logic
         );
+    
+    entity PacketTxBuffered is
+        generic (
+            SYMBOL_WIDTH            : positive := 8; -- typically a BYTE
+            HEADER_SYMBOLS          : positive := 2;
+            DATA_SYMBOLS            : positive := 4
+        );
+        port (
+            CLK                     : in std_logic;
+            RST                     : in std_logic;
+            HEADER                  : in std_logic_vector(SYMBOL_WIDTH*HEADER_SYMBOLS-1 downto 0);
+            
+            -- upstream
+            DATA_IN                 : in std_logic_vector(SYMBOL_WIDTH*DATA_SYMBOLS-1 downto 0);
+            VALID_IN                : in std_logic;
+            READY_OUT               : out std_logic;
+            
+            -- downstream
+            SYMBOL_OUT              : out std_logic_vector(SYMBOL_WIDTH-1 downto 0);
+            VALID_OUT               : out std_logic;
+            READY_IN                : in std_logic
+        );
+
+
 
 end Behavioral;
