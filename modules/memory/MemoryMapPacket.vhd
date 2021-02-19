@@ -29,8 +29,8 @@ entity MemoryMapPacket is
         TX_HEADER                   : in STD_LOGIC_VECTOR (HEADER_LEN*SYMBOL_WIDTH-1 downto 0);
 
         -- serially receive packet via SYMBOL_IN, and serially transmit packet via SYMBOL_OUT
-        SYMBOL_IN                   : in STD_LOGIC_VECTOR (MEM_DATA_LEN*SYMBOL_WIDTH-1 downto 0);
-        SYMBOL_OUT                  : out STD_LOGIC_VECTOR (MEM_DATA_LEN*SYMBOL_WIDTH-1 downto 0);
+        SYMBOL_IN                   : in STD_LOGIC_VECTOR (SYMBOL_WIDTH-1 downto 0);
+        SYMBOL_OUT                  : out STD_LOGIC_VECTOR (SYMBOL_WIDTH-1 downto 0);
 
         -- handshake TO serial
         SYM_READY_IN                : in STD_LOGIC;
