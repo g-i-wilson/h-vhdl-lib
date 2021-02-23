@@ -10,7 +10,7 @@ use IEEE.NUMERIC_STD.ALL;
 library UNISIM;
 use UNISIM.VComponents.all;
 
-entity TestMemoryMapPacket is
+entity TestMemoryMapServer is
     port (
         CLK                     : in std_logic;
         
@@ -22,10 +22,10 @@ entity TestMemoryMapPacket is
         RX                      : in std_logic;
         TX                      : out std_logic
     );
-end TestMemoryMapPacket;
+end TestMemoryMapServer;
 
 
-architecture Behavioral of TestMemoryMapPacket is
+architecture Behavioral of TestMemoryMapServer is
 
     signal clk_sig                  : std_logic;
     signal rst_sig                  : std_logic;
@@ -43,7 +43,6 @@ architecture Behavioral of TestMemoryMapPacket is
     signal sym_in_sig               : std_logic_vector(7 downto 0);
     signal sym_out_sig              : std_logic_vector(7 downto 0);
 
-    signal control_out_sig          : std_logic_vector(7 downto 0);
     signal addr_out_sig             : std_logic_vector(15 downto 0);
     signal data_in_sig              : std_logic_vector(15 downto 0);
     signal data_out_sig             : std_logic_vector(15 downto 0);
@@ -119,7 +118,6 @@ begin
             -- packet header length in symbols
             SERVER_ID_LEN               => 2,
             -- packet field lengths in symbols
-            CONTROL_LEN                 => 1,
             MEM_ADDR_LEN                => 2,
             MEM_DATA_LEN		        => 2
         )
@@ -142,7 +140,6 @@ begin
             SYM_VALID_IN                => rx_valid_sig,
     
             -- write ADDR or ADDR+DATA_OUT to memory and read DATA_IN from memory
-            CONTROL_OUT                 => control_out_sig,
             ADDR_OUT                    => addr_out_sig,
             DATA_OUT                    => data_out_sig,
             DATA_IN                     => data_in_sig,
@@ -158,24 +155,30 @@ begin
 
     RAM: entity work.SimpleRAM12a8d
         port map (
-            CLK                         => CLK,
-            RST                         => RST,
+            CLK                         => clk_sig,
+            RST                         => rst_sig,
             
             ADDR                        => addr_out_sig(11 downto 0),
             WRITE                       => addr_out_sig(15),
     
             DATA_IN                     => data_out_sig,
-            DATA_OUT                    => data_in_sig
+            DATA_OUT                    => data_in_sig,
+            
+            VALID_IN                    => packet_valid_sig,
+            READY_OUT                   => mem_ready_sig,
+            VALID_OUT                   => mem_valid_sig,
+            READY_IN                    => packet_ready_sig
         );
         
-    ILA : entity work.ila_TestMemoryMapPacket
+    ILA : entity work.ila_TestMemoryMapServer
     port map (
         clk             => clk_sig,
         probe0(0)       => packet_ready_sig,
         probe1(0)       => packet_valid_sig,
-        probe2          => control_out_sig,
-        probe3          => addr_out_sig,
-        probe4          => data_out_sig
+        probe2          => mem_ready_sig,
+        probe3          => mem_valid_sig,
+        probe4          => addr_out_sig,
+        probe5          => data_out_sig
     );
 
 end Behavioral;
