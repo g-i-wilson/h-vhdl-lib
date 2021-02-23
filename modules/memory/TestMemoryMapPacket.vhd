@@ -10,9 +10,6 @@ use IEEE.NUMERIC_STD.ALL;
 library UNISIM;
 use UNISIM.VComponents.all;
 
-Library UNIMACRO;
-use UNIMACRO.vcomponents.all;
-
 entity TestMemoryMapPacket is
     port (
         CLK                     : in std_logic;
@@ -159,57 +156,18 @@ begin
             
         );
 
-
-   -- BRAM_SINGLE_MACRO: Single Port RAM
-   --                    Artix-7
-   -- Xilinx HDL Language Template, version 2020.1
-
-   -- Note -  This Unimacro model assumes the port directions to be "downto". 
-   --         Simulation of this model with "to" in the port directions could lead to erroneous results.
-
-   ---------------------------------------------------------------------
-   --  READ_WIDTH | BRAM_SIZE | READ Depth  | ADDR Width |            --
-   -- WRITE_WIDTH |           | WRITE Depth |            |  WE Width  --
-   -- ============|===========|=============|============|============--
-   --    37-72    |  "36Kb"   |      512    |    9-bit   |    8-bit   --
-   --    19-36    |  "36Kb"   |     1024    |   10-bit   |    4-bit   --
-   --    19-36    |  "18Kb"   |      512    |    9-bit   |    4-bit   --
-   --    10-18    |  "36Kb"   |     2048    |   11-bit   |    2-bit   --
-   --    10-18    |  "18Kb"   |     1024    |   10-bit   |    2-bit   --
-   --     5-9     |  "36Kb"   |     4096    |   12-bit   |    1-bit   --
-   --     5-9     |  "18Kb"   |     2048    |   11-bit   |    1-bit   --
-   --     3-4     |  "36Kb"   |     8192    |   13-bit   |    1-bit   --
-   --     3-4     |  "18Kb"   |     4096    |   12-bit   |    1-bit   --
-   --       2     |  "36Kb"   |    16384    |   14-bit   |    1-bit   --
-   --       2     |  "18Kb"   |     8192    |   13-bit   |    1-bit   --
-   --       1     |  "36Kb"   |    32768    |   15-bit   |    1-bit   --
-   --       1     |  "18Kb"   |    16384    |   14-bit   |    1-bit   --
-   ---------------------------------------------------------------------
-
-   BRAM_SINGLE_MACRO_inst : BRAM_SINGLE_MACRO
-       generic map (
-          BRAM_SIZE         => "18Kb",                      -- Target BRAM, "18Kb" or "36Kb" 
-          --DEVICE            => "7SERIES",                   -- Target Device: "VIRTEX5", "7SERIES", "VIRTEX6, "SPARTAN6" 
-          --DO_REG            => 0,                           -- Optional output register (0 or 1)
-          --INIT              => X"000000000000000000",       --  Initial values on output port
-          --INIT_FILE         => "NONE",
-          WRITE_WIDTH       => 8,                           -- Valid values are 1-72 (37-72 only valid when BRAM_SIZE="36Kb")
-          READ_WIDTH        => 8,                           -- Valid values are 1-72 (37-72 only valid when BRAM_SIZE="36Kb")
-          --SRVAL             => X"000000000000000000",       -- Set/Reset value for port output
-          WRITE_MODE        => "WRITE_FIRST"                -- "WRITE_FIRST", "READ_FIRST" or "NO_CHANGE" 
-       )
-       port map (
-          DO                => data_in_sig,                 -- Output data, width defined by READ_WIDTH parameter
-          ADDR              => addr_out_sig,                -- Input address, width defined by read/write port depth
-          CLK               => clk_sig,                     -- 1-bit input clock
-          DI                => data_out_sig,                -- Input data port, width defined by WRITE_WIDTH parameter
-          EN                => '1',                         -- 1-bit input RAM enable
-          REGCE             => REGCE,                       -- 1-bit input output register enable
-          RST               => rst_sig,                     -- 1-bit input reset
-          WE                => control_out_sig(0)           -- Input write enable, width defined by write port depth
-       );
-
+    RAM: entity work.SimpleRAM12a8d
+        port map (
+            CLK                         => CLK,
+            RST                         => RST,
+            
+            ADDR                        => addr_out_sig(11 downto 0),
+            WRITE                       => addr_out_sig(15),
     
+            DATA_IN                     => data_out_sig,
+            DATA_OUT                    => data_in_sig
+        );
+        
     ILA : entity work.ila_TestMemoryMapPacket
     port map (
         clk             => clk_sig,
