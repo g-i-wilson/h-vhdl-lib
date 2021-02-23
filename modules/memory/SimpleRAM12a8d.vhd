@@ -36,6 +36,7 @@ end SimpleRAM12a8d;
 architecture Behavioral of SimpleRAM12a8d is
 
     signal ready_out_sig    : std_logic;
+    signal valid_out_sig    : std_logic;
     signal reg_en_sig       : std_logic;
     
 begin
@@ -83,12 +84,14 @@ begin
           ADDR              => ADDR,                        -- Input address, width defined by read/write port depth
           CLK               => CLK,                         -- 1-bit input clock
           DI                => DATA_IN,                     -- Input data port, width defined by WRITE_WIDTH parameter
-          EN                => '1',                         -- 1-bit input RAM enable
+          EN                => reg_en_sig,                    -- 1-bit input RAM enable
           REGCE             => reg_en_sig,                  -- 1-bit input output register enable
           RST               => RST,                         -- 1-bit input reset
           WE(0)             => WRITE                        -- Input write enable, width defined by write port depth
        );
 
+    VALID_OUT <= valid_out_sig;
+    
     ready_out_sig <= READY_IN;
     READY_OUT <= ready_out_sig;
     
@@ -96,10 +99,10 @@ begin
 
     process (CLK) begin
         if rising_edge(CLK) then
-            if (RST='0') then
-                VALID_OUT <= reg_en_sig;
-            else
-                VALID_OUT <= '0';
+            if (RST='1') then
+                valid_out_sig <= '0';
+            elsif (ready_out_sig='1') then
+                valid_out_sig <= VALID_IN;
             end if;
         end if;
     end process;
