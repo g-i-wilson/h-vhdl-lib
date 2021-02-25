@@ -44,8 +44,8 @@ architecture Behavioral of TestMemoryMapServer is
     signal sym_out_sig              : std_logic_vector(7 downto 0);
 
     signal addr_out_sig             : std_logic_vector(15 downto 0);
-    signal data_in_sig              : std_logic_vector(15 downto 0);
-    signal data_out_sig             : std_logic_vector(15 downto 0);
+    signal data_in_sig              : std_logic_vector(7 downto 0);
+    signal data_out_sig             : std_logic_vector(7 downto 0);
 
     signal rx_alarm_sig             : std_logic_vector(1 downto 0);
     
@@ -119,7 +119,7 @@ begin
             SERVER_ID_LEN               => 2,
             -- packet field lengths in symbols
             MEM_ADDR_LEN                => 2,
-            MEM_DATA_LEN		        => 2
+            MEM_DATA_LEN		        => 1
         )
         port map (
             CLK                         => clk_sig,
@@ -175,8 +175,8 @@ begin
         clk             => clk_sig,
         probe0(0)       => packet_ready_sig,
         probe1(0)       => packet_valid_sig,
-        probe2          => mem_ready_sig,
-        probe3          => mem_valid_sig,
+        probe2(0)       => mem_ready_sig,
+        probe3(0)       => mem_valid_sig,
         probe4          => addr_out_sig,
         probe5          => data_out_sig
     );

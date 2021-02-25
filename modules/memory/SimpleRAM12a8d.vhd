@@ -37,9 +37,32 @@ architecture Behavioral of SimpleRAM12a8d is
 
     signal ready_out_sig    : std_logic;
     signal valid_out_sig    : std_logic;
-    signal reg_en_sig       : std_logic;
+    signal ram_en_sig       : std_logic;
+    signal ram_regce_sig    : std_logic;
     
 begin
+
+    SimpleRAMFSM_module: entity work.SimpleRAMFSM
+        port map ( 
+            CLK                         => CLK,
+            RST                         => RST,
+            
+            WRITE                       => WRITE,
+    
+            VALID_IN                    => VALID_IN,
+            READY_OUT                   => ready_out_sig,
+            
+            VALID_OUT                   => valid_out_sig,
+            READY_IN                    => READY_IN
+        );
+        
+    VALID_OUT       <= valid_out_sig;
+    
+    READY_OUT       <= ready_out_sig;
+    
+    ram_en_sig      <= ready_out_sig and VALID_IN;
+    ram_regce_sig   <= ready_out_sig and VALID_IN and not WRITE;
+
 
    -- BRAM_SINGLE_MACRO: Single Port RAM
    --                    Artix-7
@@ -84,28 +107,10 @@ begin
           ADDR              => ADDR,                        -- Input address, width defined by read/write port depth
           CLK               => CLK,                         -- 1-bit input clock
           DI                => DATA_IN,                     -- Input data port, width defined by WRITE_WIDTH parameter
-          EN                => reg_en_sig,                    -- 1-bit input RAM enable
-          REGCE             => reg_en_sig,                  -- 1-bit input output register enable
+          EN                => ram_en_sig,                  -- 1-bit input RAM enable
+          REGCE             => ram_regce_sig,               -- 1-bit input output register enable
           RST               => RST,                         -- 1-bit input reset
           WE(0)             => WRITE                        -- Input write enable, width defined by write port depth
        );
-
-    VALID_OUT <= valid_out_sig;
-    
-    ready_out_sig <= READY_IN;
-    READY_OUT <= ready_out_sig;
-    
-    reg_en_sig <= ready_out_sig and VALID_IN;
-
-    process (CLK) begin
-        if rising_edge(CLK) then
-            if (RST='1') then
-                valid_out_sig <= '0';
-            elsif (ready_out_sig='1') then
-                valid_out_sig <= VALID_IN;
-            end if;
-        end if;
-    end process;
-    
 
 end Behavioral;
