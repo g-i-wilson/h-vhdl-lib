@@ -35,9 +35,12 @@ end PacketRxBuffered;
 
 architecture Behavioral of PacketRxBuffered is
 
-  signal data_frame_sig                 : std_logic_vector(SYMBOL_WIDTH*DATA_SYMBOLS-1 downto 0);
-  signal packet_valid_sig               : std_logic;
-  signal fifo_ready_sig                 : std_logic;
+  signal packet_data_sig        : std_logic_vector(SYMBOL_WIDTH*DATA_SYMBOLS-1 downto 0);
+  signal packet_valid_sig       : std_logic;
+
+  signal fifo_data_sig          : std_logic_vector(SYMBOL_WIDTH*DATA_SYMBOLS-1 downto 0);
+  signal fifo_ready_sig         : std_logic;
+  signal fifo_valid_sig         : std_logic;
 
 begin
 
@@ -58,7 +61,7 @@ begin
             READY_OUT           => READY_OUT,
 
             -- downstream data frame
-            DATA_OUT            => data_frame_sig,
+            DATA_OUT            => packet_data_sig,
             VALID_OUT           => packet_valid_sig,
            	READY_IN            => fifo_ready_sig
         );
@@ -72,16 +75,34 @@ begin
               RST                       => RST,
               
               -- upstream data frame
-              DATA_IN                   => data_frame_sig,
+              DATA_IN                   => packet_data_sig,
               VALID_IN                  => packet_valid_sig,
               READY_OUT                 => fifo_ready_sig,
               
               -- downstream data frame
-              DATA_OUT                  => DATA_OUT,
-              VALID_OUT                 => VALID_OUT,
+              DATA_OUT                  => fifo_data_sig,
+              VALID_OUT                 => fifo_valid_sig,
               READY_IN                  => READY_IN
               
           );
+          
+    DATA_OUT <= fifo_data_sig;
+    VALID_OUT <= fifo_valid_sig;
 
+    ILA : entity work.ila_PacketRxBuffered
+    port map (
+        clk             => CLK,
+        
+        probe0          => packet_data_sig,
+        probe1(0)       => packet_valid_sig,
+        
+        probe2          => fifo_data_sig,
+        probe3(0)       => fifo_ready_sig,
+        probe4(0)       => fifo_valid_sig,
+        
+        probe5          => SYMBOL_IN,
+        probe6(0)       => READY_IN,
+        probe7(0)       => VALID_IN
+    );
 
 end Behavioral;

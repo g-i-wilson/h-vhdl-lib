@@ -35,6 +35,8 @@ architecture Behavioral of SimpleFIFO is
 
     signal fifo_full_sig        : std_logic;
     signal fifo_empty_sig       : std_logic;
+    
+    signal valid_out_sig        : std_logic;
 
 
 begin    
@@ -61,12 +63,13 @@ begin
             EMPTY               => fifo_empty_sig       -- 1-bit output empty
         );
         
-    READY_OUT <= not fifo_full_sig;    
+    READY_OUT <= not fifo_full_sig;
+    valid_out_sig <= (not fifo_empty_sig) and READY_IN;
         
     process (CLK) begin
         if rising_edge(CLK) then
             if READY_IN='1' then
-                VALID_OUT <= not fifo_empty_sig;
+                VALID_OUT <= valid_out_sig;
             end if;
         end if;
     end process;

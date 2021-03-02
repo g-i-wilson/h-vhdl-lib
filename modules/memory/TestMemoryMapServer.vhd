@@ -40,8 +40,8 @@ architecture Behavioral of TestMemoryMapServer is
     signal mem_valid_sig            : std_logic;
     signal packet_ready_sig         : std_logic;
 
-    signal sym_in_sig               : std_logic_vector(7 downto 0);
-    signal sym_out_sig              : std_logic_vector(7 downto 0);
+    signal rx_sym_sig               : std_logic_vector(7 downto 0);
+    signal tx_sym_sig               : std_logic_vector(7 downto 0);
 
     signal addr_out_sig             : std_logic_vector(15 downto 0);
     signal data_in_sig              : std_logic_vector(7 downto 0);
@@ -93,7 +93,7 @@ begin
             RX 						=> RX,
             -- outputs
             VALID 					=> rx_valid_sig,
-            DATA 					=> sym_in_sig,
+            DATA 					=> rx_sym_sig,
             ALARM 					=> rx_alarm_sig
         );
 
@@ -105,7 +105,7 @@ begin
             RST                 => rst_sig,
             BIT_TIMER_PERIOD    => x"0063", -- 99 == 100MHz/(99+1) == 1Mbps
             VALID               => sym_valid_sig,
-            DATA                => sym_out_sig,
+            DATA                => tx_sym_sig,
             -- outputs
             READY               => tx_ready_sig,
             TX                  => TX
@@ -128,16 +128,14 @@ begin
             -- packet
             SERVER_ID                   => x"6D30", -- 'm','0'
     
-            -- serially receive packet via SYMBOL_IN, and serially transmit packet via SYMBOL_OUT
-            SYMBOL_IN                   => sym_in_sig,
-            SYMBOL_OUT                  => sym_out_sig,
-    
-            -- handshake TO serial
-            SYM_READY_IN                => tx_ready_sig,
-            SYM_VALID_OUT               => sym_valid_sig,
             -- handshake FROM serial
+            SYMBOL_IN                   => rx_sym_sig,
             SYM_READY_OUT               => open,
             SYM_VALID_IN                => rx_valid_sig,
+            -- handshake TO serial
+            SYMBOL_OUT                  => tx_sym_sig,
+            SYM_READY_IN                => tx_ready_sig,
+            SYM_VALID_OUT               => sym_valid_sig,
     
             -- write ADDR or ADDR+DATA_OUT to memory and read DATA_IN from memory
             ADDR_OUT                    => addr_out_sig,
@@ -177,8 +175,13 @@ begin
         probe1(0)       => packet_valid_sig,
         probe2(0)       => mem_ready_sig,
         probe3(0)       => mem_valid_sig,
-        probe4          => addr_out_sig,
-        probe5          => data_out_sig
+        probe4(0)       => rx_valid_sig,
+        probe5(0)       => tx_ready_sig,
+        probe6          => rx_sym_sig,
+        probe7          => tx_sym_sig,
+        probe8          => addr_out_sig,
+        probe9          => data_out_sig,
+        probe10         => rx_alarm_sig
     );
 
 end Behavioral;

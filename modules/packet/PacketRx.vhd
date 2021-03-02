@@ -12,7 +12,7 @@ use UNIMACRO.vcomponents.all;
 entity PacketRx is
     generic (
         SYMBOL_WIDTH                : positive := 8; -- typically a BYTE
-        DATA_SYMBOLS                : positive := 4; -- DATA_SYMBOLS does not include the last checksum symbol
+        DATA_SYMBOLS                : positive := 3; -- DATA_SYMBOLS does not include the last checksum symbol
         HEADER_SYMBOLS              : positive := 2
     );
     port (
@@ -35,8 +35,9 @@ end PacketRx;
 architecture Behavioral of PacketRx is
 
     -- total symbols = DATA_SYMBOLS + 1 checksum symbol
-    signal packet_sig               : std_logic_vector((1+DATA_SYMBOLS+HEADER_SYMBOLS)*SYMBOL_WIDTH-1 downto 0);
-    signal header_sig               : std_logic_vector(HEADER_SYMBOLS*SYMBOL_WIDTH-1 downto 0);
+    signal packet_sig               : std_logic_vector((HEADER_SYMBOLS+DATA_SYMBOLS+1)*SYMBOL_WIDTH-1 downto 0);
+    signal header_sig               : std_logic_vector( HEADER_SYMBOLS                *SYMBOL_WIDTH-1 downto 0);
+    signal data_sig                 : std_logic_vector(                DATA_SYMBOLS   *SYMBOL_WIDTH-1 downto 0);
 
     signal symbol_newest_sig        : std_logic_vector(SYMBOL_WIDTH-1 downto 0);
     signal symbol_oldest_sig        : std_logic_vector(SYMBOL_WIDTH-1 downto 0);
@@ -49,11 +50,12 @@ architecture Behavioral of PacketRx is
 
 begin
 
-    header_sig          <= packet_sig((1+DATA_SYMBOLS+HEADER_SYMBOLS)*SYMBOL_WIDTH-1 downto (1+DATA_SYMBOLS               )*SYMBOL_WIDTH);
-    DATA_OUT            <= packet_sig((1+DATA_SYMBOLS               )*SYMBOL_WIDTH-1 downto                                 SYMBOL_WIDTH);
-    
+    symbol_oldest_sig   <= packet_sig((HEADER_SYMBOLS+DATA_SYMBOLS+1)*SYMBOL_WIDTH-1 downto (HEADER_SYMBOLS+DATA_SYMBOLS  )*SYMBOL_WIDTH); -- first header symbol
+    header_sig          <= packet_sig((HEADER_SYMBOLS+DATA_SYMBOLS+1)*SYMBOL_WIDTH-1 downto (               DATA_SYMBOLS+1)*SYMBOL_WIDTH);
+    data_sig            <= packet_sig((               DATA_SYMBOLS+1)*SYMBOL_WIDTH-1 downto                                 SYMBOL_WIDTH);
     symbol_newest_sig   <= packet_sig(                                SYMBOL_WIDTH-1 downto                                 0           );
-    symbol_oldest_sig   <= packet_sig((1+DATA_SYMBOLS+HEADER_SYMBOLS)*SYMBOL_WIDTH-1 downto (  DATA_SYMBOLS+HEADER_SYMBOLS)*SYMBOL_WIDTH);
+
+    DATA_OUT            <= data_sig;
 
     shift_en_sig        <= VALID_IN     and     ready_out_sig;
     READY_OUT           <=                      ready_out_sig;
@@ -66,7 +68,7 @@ begin
 
     shift_reg: entity work.Reg1DSymbols
         generic map (
-            LENGTH          => HEADER_SYMBOLS+DATA_SYMBOLS+1, -- total = HEADER_SYMBOLS + DATA_SYMBOLS + 1 checksum symbol
+            LENGTH          => HEADER_SYMBOLS + DATA_SYMBOLS + 1,
             SYMBOL_WIDTH    => SYMBOL_WIDTH,
             BIG_ENDIAN      => TRUE -- PacketRx is always "big endian"
         )
@@ -115,7 +117,9 @@ begin
         probe3(0)       => ready_out_sig,
         probe4(0)       => packet_complete_sig,
         probe5          => checksum_sig,
-        probe6          => checksum_next_sig
+        probe6          => checksum_next_sig,
+        probe7          => header_sig,
+        probe8          => data_sig
     );
 
 
