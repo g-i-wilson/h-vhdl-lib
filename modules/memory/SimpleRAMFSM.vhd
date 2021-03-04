@@ -64,12 +64,12 @@ begin
         
         case current_state is
         
-            when READY_OUT_STATE =>
-                if (VALID_IN = '1' and WRITE='1') then
+            when READY_OUT_STATE => -- stays in the READY_OUT_STATE during a WRITE
+                if (VALID_IN = '1' and WRITE='0') then
                     next_state <= VALID_OUT_STATE;
                 end if;
                   
-            when VALID_OUT_STATE =>
+            when VALID_OUT_STATE => -- only happens in a READ
                 if (READY_IN='1') then
                     next_state <= READY_OUT_STATE;
                 end if;
