@@ -181,7 +181,8 @@ begin
         probe7          => tx_sym_sig,
         probe8          => addr_out_sig,
         probe9          => data_out_sig,
-        probe10         => rx_alarm_sig
+        probe10         => rx_alarm_sig,
+        probe11(0)       => sym_valid_sig
     );
 
 end Behavioral;
