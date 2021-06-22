@@ -36,11 +36,48 @@ architecture Behavioral of SimpleFIFO is
     signal fifo_full_sig        : std_logic;
     signal fifo_empty_sig       : std_logic;
     
+    signal valid_in_sig         : std_logic;
     signal valid_out_sig        : std_logic;
+    signal ready_in_sig         : std_logic;
+    signal ready_out_sig        : std_logic;
+
+    signal timer_sig            : std_logic;
+
+    signal mem_en_sig           : std_logic;
+    signal mem_rst_sig          : std_logic;
 
 
-begin    
+begin
 
+
+    FIFO_FSM: entity work.SimpleFIFOFSM
+        port map (
+            CLK         => CLK,
+            RST         => RST,
+                    
+            TIMER       => timer_sig,
+            
+            MEM_EN      => mem_en_sig,
+            
+            MEM_RST     => mem_rst_sig
+        );
+    
+    -- From Vivado Simulator TCL output:
+    -- WREN must be low for at least two WRCLK clock cycles after RST deasserted.
+    -- RDEN must be low for at least two RDCLK clock cycles after RST deasserted.
+    -- RST must be held high for at least five RDCLK clock cycles,
+    --  and RDEN must be low before RST becomes active high,
+    --  and RDEN remains low during this reset cycle.
+
+    Timer_module : entity work.Timer
+        generic map (
+            WIDTH               => 3
+        )
+        port map (
+            CLK                 => CLK,
+            RST                 => RST,
+            DONE                => timer_sig
+        );
 
     FIFO_Tx_module : FIFO_SYNC_MACRO
         generic map (
@@ -55,21 +92,35 @@ begin
             RST                 => RST,                 -- 1-bit input reset
             -- input path
             DI                  => DATA_IN,             -- Input data, width defined by DATA_WIDTH parameter
-            WREN                => VALID_IN,            -- 1-bit input write enable
+            WREN                => valid_in_sig,        -- 1-bit input write enable
             FULL                => fifo_full_sig,       -- 1-bit output full
             -- output path
             DO                  => DATA_OUT,            -- Output data, width defined by DATA_WIDTH parameter
-            RDEN                => READY_IN,            -- 1-bit input read enable
+            RDEN                => ready_in_sig,        -- 1-bit input read enable
             EMPTY               => fifo_empty_sig       -- 1-bit output empty
         );
         
-    READY_OUT <= not fifo_full_sig;
-    valid_out_sig <= (not fifo_empty_sig) and READY_IN;
+        
+    ready_in_sig    <= READY_IN                             and mem_en_sig;
+    ready_out_sig   <= (not fifo_full_sig)                  and mem_en_sig;
+    
+    valid_in_sig    <= VALID_IN                             and mem_en_sig;
+    valid_out_sig   <= (not fifo_empty_sig) and READY_IN    and mem_en_sig;
+        
         
     process (CLK) begin
         if rising_edge(CLK) then
-            if READY_IN='1' then
-                VALID_OUT <= valid_out_sig;
+            if RST='1' then
+                VALID_OUT <= '0';
+            else
+                if READY_IN='1' then
+                    VALID_OUT <= valid_out_sig;
+                end if;
+            end if;
+            if RST='1' then
+                READY_OUT <= '0';
+            else
+                READY_OUT <= ready_out_sig;
             end if;
         end if;
     end process;
