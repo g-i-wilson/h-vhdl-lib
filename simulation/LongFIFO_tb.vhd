@@ -96,10 +96,16 @@ begin
         valid_in_sig <= '0';
         ready_in_sig <= '0';
         
-        wait for 5ns;
-        clk_sig <= '0';
-        wait for 5ns;
-        clk_sig <= '1';
+        wait for 100ns;
+        
+--        for a in 0 to 9 loop
+            
+            wait for 5ns;
+            clk_sig <= '0';
+            wait for 5ns;
+            clk_sig <= '1';
+        
+--        end loop;
         
         wait for 5ns;
         rst_sig <= '0';

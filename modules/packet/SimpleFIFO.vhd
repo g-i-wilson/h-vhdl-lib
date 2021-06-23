@@ -41,7 +41,8 @@ architecture Behavioral of SimpleFIFO is
     signal ready_in_sig         : std_logic;
     signal ready_out_sig        : std_logic;
 
-    signal timer_sig            : std_logic;
+    signal timer_done_sig       : std_logic;
+    signal timer_rst_sig        : std_logic;
 
     signal mem_en_sig           : std_logic;
     signal mem_rst_sig          : std_logic;
@@ -55,10 +56,10 @@ begin
             CLK         => CLK,
             RST         => RST,
                     
-            TIMER       => timer_sig,
+            TIMER_DONE  => timer_done_sig,
+            TIMER_RST   => timer_rst_sig,
             
             MEM_EN      => mem_en_sig,
-            
             MEM_RST     => mem_rst_sig
         );
     
@@ -71,14 +72,14 @@ begin
 
     Timer_module : entity work.Timer
         generic map (
-            WIDTH               => 3
+            WIDTH               => 4
         )
         port map (
             CLK                 => CLK,
-            RST                 => RST,
-            DONE                => timer_sig
+            RST                 => timer_rst_sig,
+            DONE                => timer_done_sig
         );
-
+        
     FIFO_Tx_module : FIFO_SYNC_MACRO
         generic map (
 --            DEVICE              => "7SERIES",         -- Target Device: "VIRTEX5, "VIRTEX6", "7SERIES" 
